@@ -1,0 +1,4 @@
+__pycache__
+.pytest_cache
+composite_pulse_optimization
+test
