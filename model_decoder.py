@@ -6,42 +6,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from tqdm import tqdm
 
 
-###############################################################################
-# Utility helpers – flattening unitaries and fidelity
-###############################################################################
-
-def _to_real_vector(U: torch.Tensor) -> torch.Tensor:
-    """Flatten a complex matrix into a real‑valued vector (…, 2*d*d)."""
-    real = U.real
-    imag = U.imag
-    return torch.cat([
-        real.reshape(*real.shape[:-2], -1),
-        imag.reshape(*imag.shape[:-2], -1)
-    ], dim=-1)
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
-def fidelity(U_out: torch.Tensor, U_target: torch.Tensor) -> torch.Tensor:
-    """
-    Entanglement fidelity F = |Tr(U_out† U_target)|² / d²
-    Works for any batch size B and dimension d.
-    """
-    d = U_out.shape[-1]
-
-    # Trace of U_out† U_target – no data movement thanks to index relabelling.
-    inner = torch.einsum("bji,bij->b", U_out.conj(), U_target)  # shape [B]
-
-    return (inner.conj() * inner / d ** 2).real                        # shape [B] or scalar
-
-
-###############################################################################
-# Model
-###############################################################################
 
 class CompositePulseTransformerDecoder(nn.Module):
-    """Transformer decoder mapping *U_target* → pulse sequence.
+    """Transformer decoder mapping *U_targets* → pulse sequence.
 
     Each pulse is a continuous vector of parameters whose ranges are supplied
     via ``pulse_space``.  For a single‑qubit drive this could be (Δ, Ω, φ, t).
@@ -51,13 +25,14 @@ class CompositePulseTransformerDecoder(nn.Module):
         self,
         num_qubits: int,
         pulse_space: Dict[str, Tuple[float, float]],
-        *,
         max_pulses: int = 16,
         d_model: int = 256,
         n_layers: int = 12,
         n_heads: int = 4,
         dropout: float = 0.1,
+        tokenizer: nn.Linear=None # (2 * self.dim ** 2, d_model)
     ) -> None:
+        
         super().__init__()
         self.num_qubits = num_qubits
         self.dim = 2 ** num_qubits
@@ -73,15 +48,17 @@ class CompositePulseTransformerDecoder(nn.Module):
         self.max_pulses = max_pulses
         self.d_model = d_model
 
+
         # Positional embedding for pulse index (0 … max_pulses‑1)
-        self.register_buffer("pos_ids", torch.arange(max_pulses))
-        self.pos_emb = nn.Embedding(max_pulses, d_model)
+        self.register_buffer("pos_ids", torch.arange(max_pulses + 1))
+        self.pos_emb = nn.Embedding(max_pulses+1, d_model)
 
-        # Projection of flattened (real+imag) unitary → d_model
-        self.unitary_proj = nn.Linear(2 * self.dim ** 2, d_model)
 
-        # Learned start‑of‑sequence token
-        self.sos = nn.Parameter(torch.randn(1, 1, d_model))
+        # Tokenize target unitary
+        if tokenizer is None:
+            self.tokenizer = nn.Linear(2 * self.dim ** 2, d_model)
+        else:
+            self.tokenizer = tokenizer
 
         # Transformer decoder (only the *decoder* – target‑side causal mask)
         layer = nn.TransformerDecoderLayer(
@@ -94,43 +71,45 @@ class CompositePulseTransformerDecoder(nn.Module):
         self.decoder = nn.TransformerDecoder(layer, num_layers=n_layers)
 
         # Output linear head – maps decoder hidden → pulse parameters (normalised)
-        self.head = nn.Linear(d_model, self.param_dim)
+        self.out = nn.Linear(d_model, self.param_dim)
+
+        
 
 
-    @staticmethod
-    def _bool_causal_mask(sz: int, device: torch.device) -> torch.Tensor:
-        return torch.triu(torch.ones(sz, sz, dtype=bool, device=device), diagonal=1)
 
-    # ------------------------------------------------------------------
-    # Forward
-    # ------------------------------------------------------------------
+    def _to_real_vector(self, U: torch.Tensor) -> torch.Tensor:
+        real = U.real.reshape(U.shape[0], -1)
+        imag = U.imag.reshape(U.shape[0], -1)
+        return torch.cat([real, imag], dim=-1)
 
-    def forward(self, U_target: torch.Tensor, *, seq_len: int | None = None) -> torch.Tensor:
-        """Generate *seq_len* pulses for every target unitary *U_target* (B, d, d)."""
-        if seq_len is None:
-            seq_len = self.max_pulses
-        if seq_len > self.max_pulses:
-            raise ValueError("seq_len exceeds max_pulses")
+    def forward(self, U_targets: torch.Tensor) -> torch.Tensor:
+        B = U_targets.shape[0]
+        device = U_targets.device
+        L = self.max_pulses + 1
 
-        B = U_target.shape[0]
+        tokens = torch.zeros(B, L, self.d_model, device=device)
+        src = self.tokenizer(self._to_real_vector(U_targets))
+        tokens[:, 0] = src
 
-        # Encode source (unitary) – shape (B, 1, d_model)
-        src = self.unitary_proj(_to_real_vector(U_target)).unsqueeze(1)
+        
 
-        # Target side: [SOS, 0, 0, …] + positional encodings
-        tgt_init = torch.zeros(B, seq_len, self.d_model, device=U_target.device)
-        tgt_init[:, 0:1, :] = self.sos
-        pos = self.pos_emb(self.pos_ids[:seq_len]).unsqueeze(0).expand(B, -1, -1)
-        tgt = tgt_init + pos
 
-        # Causal mask so pulse *k* cannot peek at future pulses
-        tgt_mask = nn.Transformer.generate_square_subsequent_mask(seq_len).to(U_target.device)
+        for i in range(self.max_pulses):
+            tgt = tokens[:, :i + 1, :].clone()  # (B, i+1, d_model)
+            # Position embedding
+            pos = self.pos_emb(self.pos_ids[:i + 1]).unsqueeze(0).expand(B, -1, -1)
+            tgt = tgt + pos
 
-        H = self.decoder(tgt, src, tgt_mask=tgt_mask)  # (B, seq_len, d_model)
-        pulses_norm = self.head(H)  # values in ℝ
+            tgt_mask = nn.Transformer.generate_square_subsequent_mask(i + 1).to(device)
 
-        # Map to physical ranges: sigmoid → (0,1) → (low, high)
-        pulses_unit = pulses_norm.sigmoid()  # (B, L, P)
-        low, high = self.param_ranges[:, 0].to(pulses_unit.device), self.param_ranges[:, 1].to(pulses_unit.device)
-        pulses = low + (high - low) * pulses_unit
+            logits = self.decoder(tgt, src.unsqueeze(1), tgt_mask=tgt_mask)
+            # (B, i+1, d_model)
+
+            tokens[:, i + 1] = logits[:, -1, :] # Shape: (B, d_model)
+
+        pulses_logit = tokens[:, 1:] # (B, max_pulses, param_dim)
+        pulses_norm = self.out(pulses_logit).sigmoid()
+        low, high = self.param_ranges[:, 0].to(pulses_norm.device), self.param_ranges[:, 1].to(pulses_norm.device)
+        pulses = low + (high - low) * pulses_norm
         return pulses
+

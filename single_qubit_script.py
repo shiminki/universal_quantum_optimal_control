@@ -31,7 +31,8 @@ from typing import Callable, Dict, List
 
 import torch
 
-from model import CompositePulseTransformerDecoder
+from model_decoder import CompositePulseTransformerDecoder
+from model_encoder import CompositePulseTransformerEncoder
 from trainer import CompositePulseTrainer
 
 ###############################################################################
@@ -198,15 +199,16 @@ def main():
         "Delta": (-5.0, 5.0),           # detuning [rad s-1]
         "Omega": (-1.0, 1.0),           # Rabi rate (normalised)
         "phi": (-math.pi, math.pi),     # phase [rad]
-        "tau": (0.0, 0.5),                # duration [arb. units]
+        "tau": (0.0, math.pi),                # duration [arb. units]
     }
 
     model_params = {
-        "num_qubits" : 1, "pulse_space" : pulse_space, "max_pulses" : 50,
-        "d_model" : 256, "n_layers" : 120, "n_heads" : 16, "dropout" : 0.1
+        "num_qubits" : 1, "pulse_space" : pulse_space, "max_pulses" : 7,
+        "d_model" : 12, "n_layers" : 80, "n_heads" : 4, "dropout" : 0.1
     }
 
     model = CompositePulseTransformerDecoder(**model_params)
+    # model = CompositePulseTransformerEncoder(**model_params)
 
     print(f"Total parameter: {sum(p.numel() for p in model.parameters())}")
 
@@ -221,10 +223,10 @@ def main():
     trainer = CompositePulseTrainer(**trainer_params)
     train_set = build_dataset()
 
-    error_params_list = [{"delta_std" : delta_std} for delta_std in torch.arange(0.1, 3.05, 0.1)]
-    # error_params_list = [{"delta_std" : delta_std} for delta_std in (0.1, 0.2)]
+    # error_params_list = [{"delta_std" : delta_std} for delta_std in torch.arange(0.1, 3.05, 0.1)]
+    error_params_list = [{"delta_std" : delta_std} for delta_std in (0.1, )]
 
-    trainer.train(train_set, error_params_list=error_params_list, epochs=150, save_path="test/test2")
+    trainer.train(train_set, error_params_list=error_params_list, epochs=1000, save_path="test/test3")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 import math
-from typing import Callable, Dict, Sequence, Tuple, Optional, List
+from typing import Callable, Dict, Sequence, Tuple, Optional, List, Union
 from pathlib import Path
 
 import torch
@@ -8,7 +8,8 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 
-from model import CompositePulseTransformerDecoder
+from model_decoder import CompositePulseTransformerDecoder
+from model_encoder import CompositePulseTransformerEncoder
 
 
 class CompositePulseTrainer:
@@ -16,7 +17,7 @@ class CompositePulseTrainer:
 
     def __init__(
         self,
-        model: CompositePulseTransformerDecoder,
+        model: Union[CompositePulseTransformerDecoder, CompositePulseTransformerEncoder],
         unitary_generator: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
         error_sampler: Callable[[int], torch.Tensor],
         *,
