@@ -154,6 +154,9 @@ def negative_log_loss(U_out, U_target, fidelity_fn, num_qubits):
     return -torch.log(torch.mean(fidelity_fn(U_out, U_target, num_qubits)))
 
 
+def infidelity_loss(U_out, U_target, fidelity_fn, num_qubits):
+    return 1 - torch.mean(fidelity_fn(U_out, U_target, num_qubits))
+
 
 
 ###############################################################################
@@ -204,29 +207,46 @@ def main():
 
     model_params = {
         "num_qubits" : 1, "pulse_space" : pulse_space, "max_pulses" : 20,
-        "d_model" : 12, "n_layers" : 40, "n_heads" : 4, "dropout" : 0.1
+        "d_model" : 128, "n_layers" : 4, "n_heads" : 16, "dropout" : 0.1
     }
 
-    model = CompositePulseTransformerDecoder(**model_params)
+    model = CompositePulseTransformerEncoder(**model_params)
     # model = CompositePulseTransformerEncoder(**model_params)
 
-    print(f"Total parameter: {sum(p.numel() for p in model.parameters())}")
-
+    
     trainer_params = {
         "model" : model, "unitary_generator" : batched_unitary_generator,
         "error_sampler": get_ore_error_distribution,
         "fidelity_fn": fidelity,
-        "loss_fn": negative_log_loss,
+        # "loss_fn": negative_log_loss,
+        "loss_fn": infidelity_loss,
         "device": "cuda" if torch.cuda.is_available() else "cpu"
     }
 
     trainer = CompositePulseTrainer(**trainer_params)
     train_set = build_dataset()
 
-    # error_params_list = [{"delta_std" : delta_std} for delta_std in torch.arange(0.1, 3.05, 0.1)]
-    error_params_list = [{"delta_std" : delta_std} for delta_std in (0.1, 0.2, 0.3, 0.4, 0.5)]
+    # #####################
+    # ## Saved path #######
+    # #####################
+    # model_path = "test/test3_err_{'delta_std':0.5}.pt"
+    # model.load_state_dict(torch.load(model_path))
 
-    trainer.train(train_set, error_params_list=error_params_list, epochs=10000, save_path="test/test3")
+    # print(model.get_average_fidelity(train_set, {"delta":0.5}))
+
+
+    #####################
+    ## Training #########
+    #####################
+
+    print(f"Total parameter: {sum(p.numel() for p in model.parameters())}")
+
+
+    error_params_list = [{"delta_std" : delta_std} for delta_std in torch.arange(0.1, 3.05, 0.1)]
+    # error_params_list = [{"delta_std" : delta_std} for delta_std in (0.1, 0.2, 0.3, 0.4, 0.5)]
+    # error_params_list = [{"delta_std" : delta_std} for delta_std in torch.arange(0.6, 3.05, 0.1)]
+
+    trainer.train(train_set, error_params_list=error_params_list, epochs=1000, save_path="weights/")
 
 
 if __name__ == "__main__":

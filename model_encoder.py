@@ -51,15 +51,14 @@ class CompositePulseTransformerEncoder(nn.Module):
         self,
         num_qubits: int,
         pulse_space: Dict[str, Tuple[float, float]],
-        *,
-        unitary_generator: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-        # unitary_generator(pulses, error) outputs unitary U_out
         max_pulses: int = 16,
-        d_model: int = 12,
-        n_layers: int = None,
+        d_model: int = 256,
+        n_layers: int = 12,
         n_heads: int = 4,
         dropout: float = 0.1,
+        tokenizer: nn.Linear=None # (2 * self.dim ** 2, d_model)
     ) -> None:
+        
         super().__init__()
         self.num_qubits = num_qubits
         self.dim = 2 ** num_qubits
@@ -94,8 +93,6 @@ class CompositePulseTransformerEncoder(nn.Module):
         # Output linear head – maps encoder hidden → pulse parameters (normalised)
         self.head = nn.Linear(d_model, self.max_pulses * self.param_dim)
 
-        # unitary generator
-        self.unitary_generator = unitary_generator
 
 
     # ------------------------------------------------------------------
@@ -116,6 +113,7 @@ class CompositePulseTransformerEncoder(nn.Module):
         pulses_norm = self.head(logit)  # (B, 1, max_pulses * param_dim)
 
         # Map to physical ranges: sigmoid → (0,1) → (low, high)
+        pulses_norm = pulses_norm.view(U_target.shape[0], self.max_pulses, self.param_dim)
         pulses_unit = pulses_norm.sigmoid()  # (B, L, P)
         low, high = self.param_ranges[:, 0].to(pulses_unit.device), self.param_ranges[:, 1].to(pulses_unit.device)
         pulses = low + (high - low) * pulses_unit

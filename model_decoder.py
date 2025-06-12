@@ -91,9 +91,6 @@ class CompositePulseTransformerDecoder(nn.Module):
         src = self.tokenizer(self._to_real_vector(U_targets))
         tokens[:, 0] = src
 
-        
-
-
         for i in range(self.max_pulses):
             tgt = tokens[:, :i + 1, :].clone()  # (B, i+1, d_model)
             # Position embedding
@@ -105,7 +102,7 @@ class CompositePulseTransformerDecoder(nn.Module):
             logits = self.decoder(tgt, src.unsqueeze(1), tgt_mask=tgt_mask)
             # (B, i+1, d_model)
 
-            tokens[:, i + 1] = logits[:, -1, :] # Shape: (B, d_model)
+            tokens[:, i + 1] = logits.mean(dim=1) # Shape: (B, d_model)
 
         pulses_logit = tokens[:, 1:] # (B, max_pulses, param_dim)
         pulses_norm = self.out(pulses_logit).sigmoid()

@@ -8,6 +8,8 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 
+import matplotlib.pyplot as plt
+
 from model_decoder import CompositePulseTransformerDecoder
 from model_encoder import CompositePulseTransformerEncoder
 
@@ -35,7 +37,7 @@ class CompositePulseTrainer:
         self.monte_carlo = monte_carlo
         self.device = device
 
-        self.optimizer = optimizer or torch.optim.AdamW(self.model.parameters(), lr=1e-3)
+        self.optimizer = optimizer or torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
         # State tracking
         self.best_state: dict[str, torch.Tensor] | None = None
@@ -80,6 +82,7 @@ class CompositePulseTrainer:
 
         
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
 
         return float(loss.detach().item())
@@ -121,6 +124,7 @@ class CompositePulseTrainer:
         error_params_list: List[Dict],  # iterate from small → large error
         epochs: int = 100,
         save_path: str | Path | None = None,
+        plot: bool = False
     ) -> None:
         """Optimise *model*; keep weights with **highest fidelity**."""
         self.device = str(self.device)
@@ -129,6 +133,8 @@ class CompositePulseTrainer:
         for error_params in error_params_list:
             self.best_fidelity = 0.0
             error_distribution = self.get_error_distribution(error_params=error_params)
+
+            fidelity_list = []
 
             with tqdm(total=epochs, desc=f"ϵ = {error_params}", dynamic_ncols=True) as pbar:
                 for epoch in range(1, epochs + 1):
@@ -151,6 +157,19 @@ class CompositePulseTrainer:
                     })
                     pbar.update(1)
 
+                    fidelity_list.append(eval_fid)
+                
+                if plot:
+                    plt.figure(figsize=(8, 4))
+                    plt.plot(range(1, epochs + 1), fidelity_list, marker='o')
+                    plt.xlabel("Epoch")
+                    plt.ylabel("Evaluation Fidelity")
+                    plt.title(f"Evaluation Fidelity vs Epoch with \nError: {error_params}")
+                    plt.grid(True)
+                    plt.tight_layout()
+                    plt.show()
+
+
             # Reload best weights after finishing current error‑band
             if self.best_state is not None:
                 self.model.load_state_dict(self.best_state)
@@ -160,6 +179,23 @@ class CompositePulseTrainer:
                 tag = f"{save_path}_err_{str(error_params).replace(' ', '')}"
                 self._save_weight(f"{tag}.pt")
                 self._save_pulses(f"{tag}_pulses.pt", train_set)
+
+    @torch.no_grad()
+    def get_average_fidelity(
+        self,
+        train_set: torch.Tensor,
+        *,
+        error_params: Dict
+    ):
+        self.model.eval()
+        self.device = str(self.device)
+        self.model.to(self.device)
+        error_distribution = self.get_error_distribution(error_params=error_params)
+        eval_fid = self.evaluate(train_set, error_distribution)
+
+        return eval_fid
+
+        
 
     # ------------------------------------------------------------------
     # Persistence helpers
