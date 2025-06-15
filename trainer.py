@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 
-from model_decoder import CompositePulseTransformerDecoder
+# from model_decoder import CompositePulseTransformerDecoder
 from model_encoder import CompositePulseTransformerEncoder
 
 
@@ -19,7 +19,8 @@ class CompositePulseTrainer:
 
     def __init__(
         self,
-        model: Union[CompositePulseTransformerDecoder, CompositePulseTransformerEncoder],
+        # model: Union[CompositePulseTransformerDecoder, CompositePulseTransformerEncoder],
+        model: CompositePulseTransformerEncoder,
         unitary_generator: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
         error_sampler: Callable[[int], torch.Tensor],
         *,
@@ -29,6 +30,7 @@ class CompositePulseTrainer:
         monte_carlo: int = 1000,
         device: str = "cuda",
     ) -> None:
+        print(f"Total parameter: {sum(p.numel() for p in model.parameters())}")
         self.model = model.to(device)
         self.unitary_generator = unitary_generator
         self.error_sampler = error_sampler
@@ -37,7 +39,7 @@ class CompositePulseTrainer:
         self.monte_carlo = monte_carlo
         self.device = device
 
-        self.optimizer = optimizer or torch.optim.Adam(self.model.parameters(), lr=1e-4)
+        self.optimizer = optimizer or torch.optim.Adam(self.model.parameters(), lr=3e-5)
 
         # State tracking
         self.best_state: dict[str, torch.Tensor] | None = None
@@ -98,9 +100,18 @@ class CompositePulseTrainer:
 
         U_target = U_target_batch.to(self.device)
         pulses = self.model(U_target)
-        error = error_distribution(U_target.shape[0]).to(self.device)
-        U_out = self.unitary_generator(pulses, error)
-        mean_fid = self.fidelity_fn(U_out, U_target, self.model.num_qubits).mean().item()
+        
+        # ──────────────────────────────────────────────────────────────
+        # Vectorised Monte‑Carlo sampling
+        # ──────────────────────────────────────────────────────────────
+        pulses_mc = pulses.repeat_interleave(self.monte_carlo, dim=0)   # (Bm, L, P)
+        targets_mc = U_target.repeat_interleave(self.monte_carlo, dim=0)  # (Bm, d, d)
+        error = error_distribution(self.monte_carlo * U_target.shape[0]).to(self.device)                   # (Bm, …)
+
+        U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)
+
+
+        mean_fid = self.fidelity_fn(U_out, targets_mc, self.model.num_qubits).mean().item()
         return mean_fid
 
     # ------------------------------------------------------------------
@@ -184,7 +195,6 @@ class CompositePulseTrainer:
     def get_average_fidelity(
         self,
         train_set: torch.Tensor,
-        *,
         error_params: Dict
     ):
         self.model.eval()

@@ -25,7 +25,10 @@ Maximize expected fidelity:
 \mathbb{E}_{E \sim p(E)}\left[ \left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 / d^2 \right]
 ```
 
-where $U_{\text{out}} = U_N \cdots U_1$ and $U_i = \text{unitary\_generator}(p_i, E)$.
+where 
+```math
+U_{\text{out}} = U_N \cdots U_1$ and $U_i = \text{unitary\_generator}(p_i, E)
+```
 
 A transformer decoder model $f(U_{\text{target}}; \theta)$ is trained to generate the pulse sequence.
 
@@ -98,7 +101,7 @@ pip install torch numpy scipy
 2. Run training:
 
 ```bash
-python trainer.py
+python single_qubit_script_encoder.py
 ```
 
 ---

@@ -4,3 +4,4 @@ composite_pulse_optimization
 test
 test.py
 .DS_Store
+evaluate.py

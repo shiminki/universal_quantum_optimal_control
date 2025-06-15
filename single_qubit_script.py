@@ -64,7 +64,7 @@ def _get_paulis(device: torch.device) -> torch.Tensor:
 # Batched propagator for a composite‑pulse sequence
 ###############################################################################
 
-def batched_unitary_generator(
+def batched_unitary_generator_ore(
     pulses: torch.Tensor,
     delta: torch.Tensor,
 ) -> torch.Tensor:
@@ -123,6 +123,74 @@ def batched_unitary_generator(
 
     return U_out
 
+
+def batched_unitary_generator(
+    pulses: torch.Tensor,
+    error: torch.Tensor,
+) -> torch.Tensor:
+    """Compose the total unitary for a **batch** of composite sequences.
+
+    Parameters
+    ----------
+    pulses : torch.Tensor
+        Shape ``(B, L, 4)``, where each pulse is
+        ``[Δ, Ω, φ, t]`` (detuning, Rabi amplitude, phase, duration).
+    error : torch.Tensor
+        Shape ``(2, B,)`` static off‑resonant detuning and pulse length error for each
+        batch element.  If you fuse Monte‑Carlo repeats into the batch, just
+        expand ``delta`` accordingly.
+
+    Returns
+    -------
+    torch.Tensor
+        Shape ``(B, 2, 2)`` complex64/128 – the composite unitary ``U_L ⋯ U_1``.
+    """
+
+    if pulses.ndim != 3 or pulses.shape[-1] != 4:
+        raise ValueError("'pulses' must have shape (B, L, 4)")
+
+    B, L, _ = pulses.shape
+    device = pulses.device
+    dtype = torch.cfloat
+
+    # Unpack and reshape to broadcast with Pauli matrices.
+    Delta, Omega, phi, tau = pulses.unbind(dim=-1)  # each (B, L)
+
+    # (4, 2, 2) on correct device
+    pauli = _get_paulis(device).type(dtype)
+
+    # ORE and PLE
+    delta = error[0]
+    epsilon = error[1]
+
+    # Build base Hamiltonian H₀ for every pulse in parallel.
+    H_base = (
+        Delta[..., None, None] * pauli[3]
+        + Omega[..., None, None]
+        * (
+            torch.cos(phi)[..., None, None] * pauli[1]
+            + torch.sin(phi)[..., None, None] * pauli[2]
+        )
+    )
+    H = H_base + delta[..., None, None, None] * pauli[3]
+
+    if epsilon is not None:
+        H = H * (1 + epsilon[..., None, None, None])
+
+    # U_k = exp(-i H_k t_k)
+    U = torch.linalg.matrix_exp(-1j * H * tau[..., None, None])  # (B, L, 2, 2)
+
+    # Left‑to‑right ordered product: U_L ⋯ U_1.
+    # (We keep the small Python loop – L ≤ 16 – because matmul reduction is
+    # not yet natively supported in TorchScript; the overhead is negligible.)
+    U_out = torch.eye(2, dtype=dtype, device=device).expand(B, 2, 2)
+    # for k in range(L - 1, -1, -1):  # reverse order
+    for k in range(L):
+        U_out = U[:, k] @ U_out
+
+    return U_out
+
+
 ###############################################################################
 # Off‑resonant‑error (ORE) distribution helper
 ###############################################################################
@@ -130,13 +198,19 @@ def batched_unitary_generator(
 def get_ore_error_distribution(batch_size:int, delta_std: float = 1.0) -> torch.tensor:
     return torch.randn(batch_size) * delta_std
 
+
+def get_ore_ple_error_distribution(batch_size:int, delta_std: float = 1.0, epsilon_std: float=0.05) -> torch.tensor:
+    ore_error = torch.randn(batch_size) * delta_std
+    ple_error = torch.randn(batch_size) * epsilon_std
+    return torch.stack([ore_error, ple_error])
+
 ###############################################################################
 # Loss and fidelity functions
 ###############################################################################
 
 
 def fidelity(U_out: torch.Tensor, U_target: torch.Tensor, num_qubits: int) -> torch.Tensor:
-    """Entanglement fidelity F = |Tr(U_out^† U_target)|² / d²."""
+    """Entanglement fidelity F = (|Tr(U_out^† U_target)|² + d) / d(d + 1)."""
     # trace over last two dims, keep batch
     # Batched conjugate transpose and matrix multiplication
     U_out_dagger = U_out.conj().transpose(-1, -2)  # [batch, 2, 2]
@@ -148,11 +222,16 @@ def fidelity(U_out: torch.Tensor, U_target: torch.Tensor, num_qubits: int) -> to
     trace = torch.einsum('bii->b', product)  # [batch]
     trace_squared = torch.abs(trace) ** 2
 
-    return trace_squared / (2**num_qubits) ** 2
+    d = 2 ** num_qubits
+
+    return (trace_squared + d) / (d * (d + 1))
 
 def negative_log_loss(U_out, U_target, fidelity_fn, num_qubits):
     return -torch.log(torch.mean(fidelity_fn(U_out, U_target, num_qubits)))
 
+
+def infidelity_loss(U_out, U_target, fidelity_fn, num_qubits):
+    return 1 - torch.mean(fidelity_fn(U_out, U_target, num_qubits))
 
 
 
@@ -203,30 +282,33 @@ def main():
     }
 
     model_params = {
-        "num_qubits" : 1, "pulse_space" : pulse_space, "max_pulses" : 20,
-        "d_model" : 12, "n_layers" : 40, "n_heads" : 4, "dropout" : 0.1
+        "num_qubits" : 1, "pulse_space" : pulse_space, "max_pulses" : 200,
+        "d_model" : 256, "n_layers" : 4, "n_heads" : 16, "dropout" : 0.1
     }
 
-    model = CompositePulseTransformerDecoder(**model_params)
-    # model = CompositePulseTransformerEncoder(**model_params)
-
-    print(f"Total parameter: {sum(p.numel() for p in model.parameters())}")
+    model = CompositePulseTransformerEncoder(**model_params)
 
     trainer_params = {
         "model" : model, "unitary_generator" : batched_unitary_generator,
-        "error_sampler": get_ore_error_distribution,
+        "error_sampler": get_ore_ple_error_distribution,
         "fidelity_fn": fidelity,
         "loss_fn": negative_log_loss,
+        # "loss_fn": infidelity_loss,
         "device": "cuda" if torch.cuda.is_available() else "cpu"
     }
 
     trainer = CompositePulseTrainer(**trainer_params)
     train_set = build_dataset()
 
-    # error_params_list = [{"delta_std" : delta_std} for delta_std in torch.arange(0.1, 3.05, 0.1)]
-    error_params_list = [{"delta_std" : delta_std} for delta_std in (0.1, 0.2, 0.3, 0.4, 0.5)]
+    #####################
+    ## Training #########
+    #####################
 
-    trainer.train(train_set, error_params_list=error_params_list, epochs=10000, save_path="test/test3")
+
+    # 5% PLE error
+    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.1, 3.05, 0.1)]
+
+    trainer.train(train_set, error_params_list=error_params_list, epochs=3000, save_path="weights/100_pulses_ORE+PLE/")
 
 
 if __name__ == "__main__":
