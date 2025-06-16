@@ -149,7 +149,7 @@ python train/single_qubit/single_qubit_script_encoder.py
 
 ## 📊 Fidelity vs. Delta Standard Deviation
 
-The following table reports the evaluation fidelity of the model trained using `single_qubit_script.py`, measured across different levels of static off-resonant error standard deviation (`delta_std`).
+The following table reports the evaluation fidelity of the model trained using `single_qubit_script.py`, measured across different levels of static off-resonant error standard deviation (`delta_std`). PLE error `epsilon_std` was set at 0.05.
 
 | `delta_std` | `eval_fidelity` |
 | ----------- | --------------- |
