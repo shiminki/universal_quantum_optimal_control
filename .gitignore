@@ -1,7 +1,7 @@
 __pycache__
 .pytest_cache
-composite_pulse_optimization
 test
 test.py
+.DS_Store
 .DS_Store
 evaluate.py

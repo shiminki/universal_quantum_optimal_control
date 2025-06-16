@@ -1,6 +1,6 @@
 from model_decoder import CompositePulseTransformerDecoder
 from trainer import CompositePulseTrainer
-from single_qubit_script import *
+from run.single_qubit.single_qubit_script import *
 import torch
 
 _I2_CPU = torch.eye(2, dtype=torch.cfloat)
