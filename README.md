@@ -8,7 +8,7 @@ This project develops a machine learning framework for generating composite puls
 
 ### Goal
 
-Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[p_1, p_2, ..., p_N] \in \mathcal{P}^N$, where each pulse is robust against a static error $E \sim p(E)$.
+Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[p_1, p_2, ..., p_N] \in \mathcal{P}^N$, where each pulse is robust against a static error $E \sim p(E)$. The primary objective is to optimize composite pulse sequence for a **large** disorder.
 
 ### Given:
 
@@ -31,6 +31,23 @@ U_{\text{out}} = U_N \cdots U_1$ and $U_i = \text{unitary\_generator}(p_i, E)
 ```
 
 A transformer decoder model $f(U_{\text{target}}; \theta)$ is trained to generate the pulse sequence.
+
+
+### Optimization Code:
+
+The key intuition for this project is to iteratively train the model from low to large disorder. The following is a pseudocode for model training
+
+```{r, eval = FALSE}
+train(unitary_generator, error_distribution, U_target):
+    theta <- initial model parameter
+    for error_param from small to large:
+        - for each epoch
+            - pulses <- f(U_target; theta) # model output
+            - error <- error_distribution(error_param) # error
+            - U_out <- unitary_generator(pulses, error)
+            - loss_fn <- -log(E[fidelity(U_out, U_target)])
+            - theta <- theta - eta * \partial_\theta loss_fn
+```
 
 ---
 
