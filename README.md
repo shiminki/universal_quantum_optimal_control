@@ -1,6 +1,6 @@
 # Robust Quantum Control with Composite Pulse Sequences
 
-This project develops a machine learning framework for generating composite pulse sequences that implement a target quantum operation with high fidelity, even under strong static disorder (e.g., off-resonant errors). It leverages a transformer decoder model to output pulse sequences robust to errors sampled from a given distribution.
+This project develops a machine learning framework for generating composite pulse sequences that implement a target quantum operation with high fidelity, even under strong static disorder (e.g., off-resonant errors). It leverages a transformer encoder model to output pulse sequences robust to errors sampled from a given distribution.
 
 ---
 
@@ -27,10 +27,10 @@ Maximize expected fidelity:
 
 where 
 ```math
-U_{\text{out}} = U_N \cdots U_1$ and $U_i = \text{unitary\_generator}(p_i, E)
+U_{\text{out}} = U_N \cdots U_1 \text{ and } U_i = \text{unitary\_generator}(p_i, E)
 ```
 
-A transformer decoder model $f(U_{\text{target}}; \theta)$ is trained to generate the pulse sequence.
+A transformer encoder model $f(U_{\text{target}}; \theta)$ is trained to generate the pulse sequence.
 
 
 ### Optimization Code:
@@ -53,9 +53,11 @@ train(unitary_generator, error_distribution, U_target):
 
 ## ⚛️ Single Qubit Example with Off-Resonant Error
 
-### Pulse Parameter:
+### Pulse Parameter Space $P$:
 
-$(\Delta, \Omega, \phi, t) \in \mathcal{P}$
+```math
+P = \{ \Delta \in (-5, 5), \Omega \in (0, 1), \phi \in (-\pi, \pi), \tau \in (0, 0.6)\}
+```
 
 ### Base Hamiltonian:
 
@@ -63,49 +65,68 @@ $(\Delta, \Omega, \phi, t) \in \mathcal{P}$
 H_{\text{base}} = \Delta \sigma_z + \Omega (\cos\phi \, \sigma_x + \sin\phi \, \sigma_y)
 ```
 
-### With Error:
+### High Off-Resonant Error with Small Pulse-Length Error:
 
+Off-Resonant Error (ORE) corresponds to the static error associated to the system disorder. Specifically, it is a unit gaussian such that
 ```math
-H = H_{\text{base}} + \delta \sigma_z, \quad \delta \sim \mathcal{N}(0, \delta_{\text{std}}^2)
+\delta \sim N(0, 1)
+H = H_{\text{base}} + \delta \sigma_z
 ```
+We are assuming the order of magnitude of the ORE is comparable to the maximum Rabi Frequency $\Omega_\max$.
+
+Pulse-Length Error (PLE) corresponds to static error associated to the pulse width. It is a small gaussian such that
+```math
+\epsilon \sim N(0, 1) \cdot 0.05
+\tau \rightarrow \tau \cdot (1 + \epsilon)
+```
+We are assuming that we are working with high-performance pulse devices such that the magnitude of PLE is roughly 5% of $\Omega_\max$.
 
 ### Resulting Unitary:
 
 ```math
-U = \exp(-i H t)
+U = \exp(-i H \tau)
 ```
 
 ---
 
-## 📉 Code Structure
+## 📁 Codebase Structure
 
-### `model.py`
+This repository is organized into the following key directories:
 
-Defines `CompositePulseTransformerDecoder`, which generates the composite pulse sequence:
+### `model/`
 
-```python
-class CompositePulseTransformerDecoder:
-    def __init__(self, num_qubit, pulse_space, max_pulses): ...
-    def forward(self, U_target): ...
-```
+Contains the core machine learning logic for composite pulse sequence generation:
 
-### `trainer.py`
+* `model_encoder.py`: Defines the Transformer-based model architecture for generating pulse sequences.
+* `trainer.py`: Implements the training loop and optimization logic for model learning.
 
-Handles training via Monte Carlo sampling over error distributions:
+### `weights/`
 
-```python
-class Trainer:
-    def __init__(self, model, unitary_generator, error_model, loss_function, monte_carlo_size=1000): ...
-    def train(self, unitary_list, error_param): ...
-```
+Stores pretrained model weights and the optimized pulse sequences:
 
-### `single_qubit_ore.py`
+* Use these files for direct inference without retraining.
+* Includes checkpoints and sample pulse outputs.
 
-* Defines `unitary_generator(pulse, error)`
-* Defines `p(E; error_param)` as Gaussian
-* Computes fidelity between target and output unitary
+### `train/`
+
+Contains training scripts tailored to specific quantum systems:
+
+* `single_qubit/`: Scripts for training on single-qubit target unitaries.
+* `two_qubit/`: Scripts for training on two-qubit operations (e.g., entangling gates).
+
+You can configure the model and training settings via the `model_params.json` file in each subfolder.
+
+### `visualize/`
+
+Includes visualization utilities:
+
+* Use these scripts to plot and analyze the learned composite pulse sequences.
+* Helpful for inspecting fidelity contours, pulse robustness, and system behavior under error.
 
 ---
+
+To get started, run a training script under `train/`, or load a pretrained model from `weights/` and use the visualization tools to analyze performance.
+
 
 ## 🚀 Getting Started
 
@@ -118,7 +139,7 @@ pip install torch numpy scipy
 2. Run training:
 
 ```bash
-python single_qubit_script_encoder.py
+python train/single_qubit/single_qubit_script_encoder.py
 ```
 
 ---
