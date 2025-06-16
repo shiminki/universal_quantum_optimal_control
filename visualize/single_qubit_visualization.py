@@ -10,8 +10,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-from model_encoder import CompositePulseTransformerEncoder
-from trainer import CompositePulseTrainer
+
+# Add to the top of visualize/single_qubit_visualization.py
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 from run.single_qubit.single_qubit_script import *
 
@@ -26,10 +29,8 @@ if __name__ == "__main__":
     torch.manual_seed(0)
     M = 10000
 
-    # pulse_path = "weights/100_pulses/_err_{'delta_std':tensor(1.)}_pulses.pt"
-    # pulse_path = "weights/_err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-    pulse_path = "_err_{'delta_std':tensor(1.)}_pulses.pt"
-    is_old = True
+    pulse_path = ""
+    
 
     pulses = torch.load(pulse_path) # [4, 100, 4]
     # pulses_mc = pulses.repeat_interleave(M, dim=0)
@@ -42,10 +43,7 @@ if __name__ == "__main__":
 
     for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
         df = pd.DataFrame(pulse)
-        df.to_csv(f"pulses/{target_name}_pulse.csv", index=False)
-
-        if is_old:
-            df[3] *= 2
+        df.to_csv(f"weights/single_qubit_control/{target_name}_pulse.csv", index=False)
 
         errors_mc = get_ore_ple_error_distribution(M, 1, 0.05)
         U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
