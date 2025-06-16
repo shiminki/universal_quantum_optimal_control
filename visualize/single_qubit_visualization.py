@@ -16,7 +16,7 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
-from run.single_qubit.single_qubit_script import *
+from train.single_qubit.single_qubit_script import *
 
 
 
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     torch.manual_seed(0)
     M = 10000
 
-    pulse_path = ""
+    pulse_path = "weights/single_qubit_control/_err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
     
 
     pulses = torch.load(pulse_path) # [4, 100, 4]
