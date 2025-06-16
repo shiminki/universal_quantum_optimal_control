@@ -87,7 +87,9 @@ We are assuming that we are working with high-performance pulse devices such tha
 U = \exp(-i H \tau)
 ```
 
+
 ---
+
 
 ## 📁 Codebase Structure
 
@@ -141,6 +143,27 @@ pip install torch numpy scipy
 ```bash
 python train/single_qubit/single_qubit_script_encoder.py
 ```
+
+---
+
+
+## 📊 Fidelity vs. Delta Standard Deviation
+
+The following table reports the evaluation fidelity of the model trained using `single_qubit_script.py`, measured across different levels of static off-resonant error standard deviation (`delta_std`).
+
+| `delta_std` | `eval_fidelity` |
+| ----------- | --------------- |
+| 0.1         | 0.973           |
+| 0.2         | 0.983           |
+| 0.3         | 0.987           |
+| 0.4         | 0.985           |
+| 0.5         | 0.983           |
+| 0.6         | 0.981           |
+| 0.7         | 0.977           |
+| 0.8         | 0.973           |
+| 0.9         | 0.968           |
+| 1.0         | 0.959           |
+
 
 ---
 
