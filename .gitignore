@@ -5,3 +5,4 @@ test.py
 .DS_Store
 .DS_Store
 evaluate.py
+.gitignore

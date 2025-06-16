@@ -22,7 +22,7 @@ Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[
 Maximize expected fidelity:
 
 ```math
-\mathbb{E}_{E \sim p(E)}\left[ \left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 / d^2 \right]
+\mathbb{E}_{E \sim p(E)}\left[ \frac{\left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 + d} / {d^2 + d}\right]
 ```
 
 where 
@@ -105,6 +105,23 @@ python single_qubit_script_encoder.py
 ```
 
 ---
+
+## 🎯 2D Fidelity Contour Results
+
+The following plots show fidelity contours for different target unitaries under off-resonant error (ORE) and pulse-length error (PLE). Each plot visualizes how robust the learned composite pulse sequence is with respect to variations in error:
+
+<p align="center">
+  <img src="figures/X(pi).png" width="45%" alt="Fidelity for X(pi)">
+  <img src="figures/X(pi-2).png" width="45%" alt="Fidelity for X(pi/2)">
+  <br>
+  <img src="figures/Hadamard.png" width="45%" alt="Fidelity for Hadamard">
+  <img src="figures/Z(pi-4).png" width="45%" alt="Fidelity for Z(pi/4)">
+</p>
+
+Each figure shows the expected fidelity across a grid of error parameters. Brighter regions indicate higher fidelity, demonstrating the robustness of the generated pulse sequences across error distributions.
+
+---
+
 
 ## 📌 Notes
 
