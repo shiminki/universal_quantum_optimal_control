@@ -22,7 +22,7 @@ Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[
 Maximize expected fidelity:
 
 ```math
-\mathbb{E}_{E \sim p(E)}\left[ \frac{\left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 + d} / {d^2 + d}\right]
+\mathbb{E}_{E \sim p(E)}\left[ \frac{\left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 + d}{d^2 + d}\right]
 ```
 
 where 
