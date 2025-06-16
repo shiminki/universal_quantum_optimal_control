@@ -112,10 +112,10 @@ The following plots show fidelity contours for different target unitaries under 
 
 <p align="center">
   <img src="figures/X(pi).png" width="45%" alt="Fidelity for X(pi)">
-  <img src="figures/X(pi-2).png" width="45%" alt="Fidelity for X(pi/2)">
+  <img src="figures/X(pi:2).png" width="45%" alt="Fidelity for X(pi/2)">
   <br>
   <img src="figures/Hadamard.png" width="45%" alt="Fidelity for Hadamard">
-  <img src="figures/Z(pi-4).png" width="45%" alt="Fidelity for Z(pi/4)">
+  <img src="figures/Z(pi:4).png" width="45%" alt="Fidelity for Z(pi/4)">
 </p>
 
 Each figure shows the expected fidelity across a grid of error parameters. Brighter regions indicate higher fidelity, demonstrating the robustness of the generated pulse sequences across error distributions.
