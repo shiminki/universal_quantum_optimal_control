@@ -56,7 +56,7 @@ if __name__ == "__main__":
         
         # Create 2D grid of ORE and PLE
         ORE_vals = torch.linspace(-3, 3, 1000)
-        PLE_vals = torch.linspace(-0.3, 0.3, 50)
+        PLE_vals = torch.linspace(-0.15, 0.15, 50)
         ORE_grid, PLE_grid = torch.meshgrid(ORE_vals, PLE_vals, indexing="ij")
 
         # Flatten the grid for batch processing
@@ -86,9 +86,14 @@ if __name__ == "__main__":
         plt.contour(ORE_np, PLE_np, F_np, levels=[0.95, 0.99, 0.999], colors='white', linewidths=1.5)
 
         plt.colorbar(contour, label='Fidelity')
-        plt.xlabel(r"ORE ({\delta/\Omega_\max})")
-        plt.ylabel(r"PLE ({\epsilon/\Omega_\max})")
-        plt.title(f"Fidelity Surface for {target_name}\nF = {F.mean():.4f}")
+        plt.xlabel(r"$\delta / \Omega_{\max} \sim N(0, 1)$")
+        plt.ylabel(r"$\epsilon / \Omega_{\max} \sim N(0, 0.05^2)$")
+        plt.title(f"Fidelity Surface for {target_name}\nE[F] = {F.mean().item():.4f}")
+        # plt.suptitle(f"Fidelity Surface for {target_name}")
+        # plt.title(
+        #     fr"$\mathbb{{E}}_{{\sigma_\delta = 1,\ \sigma_\epsilon = 0.05}}[F] = {F.mean().item():.4f}$",
+        #     # fontsize=18
+        # )
         plt.grid(True)
         plt.show()
 
