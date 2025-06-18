@@ -1,6 +1,6 @@
-from model_decoder import CompositePulseTransformerDecoder
-from trainer import CompositePulseTrainer
-from run.single_qubit.single_qubit_script import *
+from model.model_encoder import CompositePulseTransformerEncoder
+from model.trainer import CompositePulseTrainer
+from train.single_qubit.single_qubit_script import *
 import torch
 
 _I2_CPU = torch.eye(2, dtype=torch.cfloat)
@@ -12,12 +12,12 @@ _SIGMA_Z_CPU = torch.tensor([[1.0, 0.0], [0.0, -1.0]], dtype=torch.cfloat)
 model_param = {
     "num_qubits": 1,
     "pulse_space": {
-        "Delta": (0, 5), "Omega": (0, 1), "phi": (-torch.pi, torch.pi), "tau": (0, 1.0)
+        "Delta": (-5, 5), "Omega": (0, 1), "phi": (-torch.pi, torch.pi), "tau": (0, 1.0)
     },
     "max_pulses": 10,
 }
 
-model = CompositePulseTransformerDecoder(**model_param)
+model = CompositePulseTransformerEncoder(**model_param)
 
 
 U_targets = torch.stack([
@@ -49,7 +49,7 @@ model_param = {
     "max_pulses": 10,
 }
 
-model = CompositePulseTransformerDecoder(**model_param)
+model = CompositePulseTransformerEncoder(**model_param)
 model.train()
 
 # Step 2: Create dummy input (batch of unitaries)

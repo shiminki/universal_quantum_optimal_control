@@ -81,7 +81,10 @@ if __name__ == "__main__":
         F_np = F_grid.numpy()
 
         plt.figure(figsize=(8, 6))
-        contour = plt.contourf(ORE_np, PLE_np, F_np, levels=20, cmap='viridis')
+        # contour = plt.contourf(ORE_np, PLE_np, F_np, levels=20, cmap='viridis')
+        contour = plt.contourf(ORE_np, PLE_np, F_np, levels=[0.8, 0.9, 0.95, 0.99, 0.999, 1.0], cmap='viridis')
+        plt.contour(ORE_np, PLE_np, F_np, levels=[0.95, 0.99, 0.999], colors='white', linewidths=1.5)
+
         plt.colorbar(contour, label='Fidelity')
         plt.xlabel(r"ORE ({\delta/\Omega_\max})")
         plt.ylabel(r"PLE ({\epsilon/\Omega_\max})")
