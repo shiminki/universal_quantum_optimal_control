@@ -105,8 +105,8 @@ if __name__ == "__main__":
         "X(pi)", "X(pi-2)", "Hadamard", "Z(pi-4)"
     ]
 
-    for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-        visualize(target_name, U_target, pulse, "Transformer CP", True)
+    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+    #     visualize(target_name, U_target, pulse, "Transformer CP", True)
 
     SCORE_pulses = build_SCORE_pulses()
 

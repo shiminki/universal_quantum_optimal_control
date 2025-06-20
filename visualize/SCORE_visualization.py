@@ -39,7 +39,7 @@ unitaries = {
     "X(pi)" : [(1, 0)],
     "X(pi/2)" : [(1/2, 0)],
     "H" : [(1, 0), (1/2, 1/2)],
-    "Z(pi/4)" : [(1/2, 0), (1/4, 1/2), (1/2, 0)]
+    "Z(pi/4)" : [(1, 0), (1/2, 1/2), (1/4, 0), (1, 0), (1/2, 1/2)]
 }
 
 
@@ -70,7 +70,7 @@ def SCOREn_config(n, phi):
         })
 
     config_to_tensor = [
-        [0, 1, x["phi"], torch.sin(x["theta"]) * x["angle"]]
+        [0, 1, x["phi"], x["angle"]]
         for x in config
     ]
 
