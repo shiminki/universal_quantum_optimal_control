@@ -10,6 +10,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+from tqdm import tqdm
+
 
 # Add to the top of visualize/single_qubit_visualization.py
 import sys, os
@@ -44,7 +46,6 @@ def visualize(target_name, U_target, pulse, name, save_csv=False):
 
 
     F_mean = F.mean().item()
-
     F_err = F.std().item() / np.sqrt(M)
 
     
@@ -91,6 +92,27 @@ def visualize(target_name, U_target, pulse, name, save_csv=False):
     plt.grid(True)
     plt.show()
 
+
+
+def get_avg_fidelity(U_target, pulse):
+
+    fidelities = {}
+
+    for delta_std in tqdm((0.1 * (i + 1) for i in range(10))):
+        errors_mc = get_ore_ple_error_distribution(M, delta_std, 0.05)
+        U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
+        pulses_plot = torch.stack([pulse]).repeat_interleave(M, dim=0)
+
+
+        U_out_plot = batched_unitary_generator(pulses_plot, errors_mc)
+        F = fidelity(U_out_plot, U_target_plot, 1)
+
+        F_mean = F.mean().item()
+        F_err = F.std().item() / np.sqrt(M)
+
+        fidelities[delta_std] = f"{F_mean:.4f} +/- {F_err:.4f}"
+    
+    return fidelities
         
 
 
@@ -110,16 +132,27 @@ if __name__ == "__main__":
         "X(pi)", "X(pi-2)", "Hadamard", "Z(pi-4)"
     ]
 
+    fidelities = {}
+
     for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-        visualize(target_name, U_target, pulse, "Transformer CP", True)
+        fidelities[target_name] = get_avg_fidelity(U_target, pulse)
+    
+    df = pd.DataFrame(fidelities)
+    df.to_csv("fidelities.csv")
+    
 
-    SCORE_pulses = build_SCORE_pulses()
+    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+        # visualize(target_name, U_target, pulse, "Transformer CP", True)
 
-    for target_name, U_target, pulse in zip(train_set_name, train_set, SCORE_pulses):
 
-        print(pulse)
 
-        print(pulse.shape)
-        visualize(target_name, U_target, pulse, "SCORE4")
+    # SCORE_pulses = build_SCORE_pulses()
+
+    # for target_name, U_target, pulse in zip(train_set_name, train_set, SCORE_pulses):
+
+        # print(pulse)
+
+        # print(pulse.shape)
+        # visualize(target_name, U_target, pulse, "SCORE4")
 
 

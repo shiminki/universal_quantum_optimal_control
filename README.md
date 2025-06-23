@@ -151,16 +151,17 @@ python train/single_qubit/single_qubit_script_encoder.py
 
 ---
 
+## 📊 Fidelity vs ORE Standard Deviation
 
-## 📊 Fidelity vs. Delta Standard Deviation
+The following table shows the average fidelity and standard error for each target unitary under varying off-resonant error (ORE) standard deviation. PLE error `epsilon_std` was set at 0.05.
 
-The following table reports the evaluation fidelity of the model trained using `single_qubit_script.py`, measured across different levels of static off-resonant error standard deviation (`delta_std`). PLE error `epsilon_std` was set at 0.05.
-
-| `delta_std` | `eval_fidelity` |
-| ----------- | --------------- |
-| 0.4         | 0.987           |
-| 0.7         | 0.984           |
-| 1.0         | 0.971           |
+| ORE Std (δ) | X(π)           | X(π−2)         | Hadamard       | Z(π−4)         |
+|-------------|----------------|----------------|----------------|----------------|
+| 0.1         | 0.9923 ± 0.0001 | 0.9950 ± 0.0001 | 0.9938 ± 0.0001 | 0.9931 ± 0.0001 |
+| 0.2         | 0.9930 ± 0.0001 | 0.9942 ± 0.0001 | 0.9937 ± 0.0001 | 0.9925 ± 0.0001 |
+| 0.3         | 0.9926 ± 0.0001 | 0.9938 ± 0.0001 | 0.9931 ± 0.0001 | 0.9925 ± 0.0001 |
+| 0.4         | 0.9917 ± 0.0001 | 0.9929 ± 0.0001 | 0.9923 ± 0.0001 | 0.9918 ± 0.0001 |
+| 0.5         | 0.9909 ± 0.0002 | 0.9919 ± 0.0002 | 0.9909 ± 0.0002 | 0.9910 ± 0.0002 |
 
 
 ---
