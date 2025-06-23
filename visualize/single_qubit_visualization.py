@@ -42,6 +42,11 @@ def visualize(target_name, U_target, pulse, name, save_csv=False):
     U_out_plot = batched_unitary_generator(pulses_plot, errors_mc)
     F = fidelity(U_out_plot, U_target_plot, 1)
 
+
+    F_mean = F.mean().item()
+
+    F_err = F.std().item() / np.sqrt(M)
+
     
     # Create 2D grid of ORE and PLE
     ORE_vals = torch.linspace(-3, 3, 1000)
@@ -77,7 +82,7 @@ def visualize(target_name, U_target, pulse, name, save_csv=False):
     plt.colorbar(contour, label='Fidelity')
     plt.xlabel(r"$\delta / \Omega_{\max} \sim N(0, 1)$")
     plt.ylabel(r"$\epsilon / \Omega_{\max} \sim N(0, 0.05^2)$")
-    plt.title(f"Fidelity Surface for {target_name} of {name}\nE[F] = {F.mean().item():.4f}\nTotal Evolution Time: {total_time:.2f} pi")
+    plt.title(f"Fidelity Surface for {target_name} of {name}\nE[F] = {F_mean:.4f} +/- {F_err:.4f}\nTotal Evolution Time: {total_time:.2f} pi")
     # plt.suptitle(f"Fidelity Surface for {target_name}")
     # plt.title(
     #     fr"$\mathbb{{E}}_{{\sigma_\delta = 1,\ \sigma_\epsilon = 0.05}}[F] = {F.mean().item():.4f}$",
@@ -105,8 +110,8 @@ if __name__ == "__main__":
         "X(pi)", "X(pi-2)", "Hadamard", "Z(pi-4)"
     ]
 
-    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-    #     visualize(target_name, U_target, pulse, "Transformer CP", True)
+    for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+        visualize(target_name, U_target, pulse, "Transformer CP", True)
 
     SCORE_pulses = build_SCORE_pulses()
 
