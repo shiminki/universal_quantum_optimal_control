@@ -141,18 +141,18 @@ if __name__ == "__main__":
     df.to_csv("fidelities.csv")
     
 
-    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-        # visualize(target_name, U_target, pulse, "Transformer CP", True)
+    for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+        visualize(target_name, U_target, pulse, "Transformer CP", True)
 
 
 
-    # SCORE_pulses = build_SCORE_pulses()
+    SCORE_pulses = build_SCORE_pulses()
 
-    # for target_name, U_target, pulse in zip(train_set_name, train_set, SCORE_pulses):
+    for target_name, U_target, pulse in zip(train_set_name, train_set, SCORE_pulses):
 
-        # print(pulse)
+        print(pulse)
 
-        # print(pulse.shape)
-        # visualize(target_name, U_target, pulse, "SCORE4")
+        print(pulse.shape)
+        visualize(target_name, U_target, pulse, "SCORE4")
 
 
