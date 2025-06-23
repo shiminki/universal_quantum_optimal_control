@@ -70,14 +70,18 @@ H_{\text{base}} = \Delta \sigma_z + \Omega (\cos\phi \, \sigma_x + \sin\phi \, \
 
 Off-Resonant Error (ORE) corresponds to the static error associated to the system disorder. Specifically, it is a unit gaussian such that
 ```math
-\delta \sim N(0, 1)\\
+\delta \sim N(0, 1)
+```
+```math
 H = H_{\text{base}} + \delta \sigma_z
 ```
 We are assuming the order of magnitude of the ORE is comparable to the maximum Rabi Frequency $\Omega_\max$.
 
 Pulse-Length Error (PLE) corresponds to static error associated to the pulse width. It is a small gaussian such that
 ```math
-\epsilon \sim N(0, 1) \cdot 0.05\\
+\epsilon \sim N(0, 1) \cdot 0.05
+```
+```math
 \tau \rightarrow \tau \cdot (1 + \epsilon)
 ```
 We are assuming that we are working with high-performance pulse devices such that the magnitude of PLE is roughly 5% of $\Omega_\max$.
