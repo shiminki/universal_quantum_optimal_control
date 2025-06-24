@@ -1,6 +1,6 @@
 # Robust Quantum Control with Composite Pulse Sequences
 
-This project develops a machine learning framework for generating composite pulse sequences that implement a target quantum operation with high fidelity, even under strong static disorder (e.g., off-resonant errors). It leverages a transformer encoder model to output pulse sequences robust to errors sampled from a given distribution.
+This project develops a machine learning framework for generating composite pulse sequences that implement a target quantum operation with high fidelity. It is specifically aimed to create pulses that are robust under strong static disorder (e.g., off-resonant errors). It leverages a transformer encoder model to output pulse sequences robust to errors sampled from a given distribution.
 
 ---
 
@@ -8,27 +8,27 @@ This project develops a machine learning framework for generating composite puls
 
 ### Goal
 
-Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[p_1, p_2, ..., p_N] \in \mathcal{P}^N$, where each pulse is robust against a static error $E \sim p(E)$. The primary objective is to optimize composite pulse sequence for a **large** disorder.
+Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[p_1, p_2, ..., p_L] \in \mathcal{P}^L$, where the resulting unitary $U_{\text{out}}$ is robust against a static error $\vec{\epsilon} \sim p(E)$. The primary objective is to optimize composite pulse sequence for a **large** disorder.
 
-### Given:
+### Problem Input:
 
 * Number of qubits $n$
 * Target unitary $U_{\text{target}} \in \mathbb{C}^{2^n \times 2^n}$
 * Pulse parameter space $\mathcal{P}$
-* Static error model $E \sim p(E)$
-* Unitary generator $g(p, \epsilon)$ that creates the unitary from pulse $p \in \mathcal{P}$ with error $\epsilon$. 
+* Static error model $\vec{\epsilon} \sim p(E)$
+* Unitary generator $U_{\text{out}} \leftarrow g(p, \vec{\epsilon})$ that creates the unitary from pulse $p \in \mathcal{P}$ with error $\vec{\epsilon}$. 
 
 ### Objective:
 
 Maximize expected fidelity:
 
 ```math
-\mathbb{E}_{E \sim p(E)}\left[ \frac{\left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 + d}{d^2 + d}\right]
+\mathbb{E}_{\vec{\epsilon} \sim p(E)}\left[ \frac{\left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 + d}{d^2 + d}\right]
 ```
 
 where 
 ```math
-U_{\text{out}} = U_N \cdots U_1 \text{ and } U_i = \text{unitary\_generator}(p_i, E)
+U_{\text{out}} = U_L \cdots U_1 \text{ and } U_i = \text{unitary\_generator}(p_i, \vec{\epsilon})
 ```
 
 A transformer encoder model $f(U_{\text{target}}; \theta)$ is trained to generate the pulse sequence.
@@ -52,50 +52,6 @@ train(unitary_generator, error_distribution, U_target):
 
 ---
 
-## ⚛️ Single Qubit Example with Off-Resonant Error
-
-### Pulse Parameter Space $P$:
-
-```math
-P = \{ \Delta \in (-5, 5), \Omega \in (0, 1), \phi \in (-\pi, \pi), \tau \in (0, 0.6)\}
-```
-
-### Base Hamiltonian:
-
-```math
-H_{\text{base}} = \Delta \sigma_z + \Omega (\cos\phi \, \sigma_x + \sin\phi \, \sigma_y)
-```
-
-### High Off-Resonant Error with Small Pulse-Length Error:
-
-Off-Resonant Error (ORE) corresponds to the static error associated to the system disorder. Specifically, it is a unit gaussian such that
-```math
-\delta \sim N(0, 1)
-```
-```math
-H = H_{\text{base}} + \delta \sigma_z
-```
-We are assuming the order of magnitude of the ORE is comparable to the maximum Rabi Frequency $\Omega_\max$.
-
-Pulse-Length Error (PLE) corresponds to static error associated to the pulse width. It is a small gaussian such that
-```math
-\epsilon \sim N(0, 1) \cdot 0.05
-```
-```math
-\tau \rightarrow \tau \cdot (1 + \epsilon)
-```
-We are assuming that we are working with high-performance pulse devices such that the magnitude of PLE is roughly 5% of $\Omega_\max$.
-
-### Resulting Unitary:
-
-```math
-U = \exp(-i H \tau)
-```
-
-
----
-
-
 ## 📁 Codebase Structure
 
 This repository is organized into the following key directories:
@@ -112,7 +68,7 @@ Contains the core machine learning logic for composite pulse sequence generation
 Stores pretrained model weights and the optimized pulse sequences:
 
 * Use these files for direct inference without retraining.
-* Includes checkpoints and sample pulse outputs.
+* Includes sample pulse outputs in csv format.
 
 ### `train/`
 
@@ -151,7 +107,52 @@ python train/single_qubit/single_qubit_script_encoder.py
 
 ---
 
-## 📊 Fidelity vs ORE Standard Deviation
+
+## ⚛️ Single Qubit Setting with Off-Resonant Error
+
+### Pulse Parameter Space $P$:
+
+```math
+P_{\text{single}} = \{ \Delta \in (-5, 5), \Omega \in (0, 1), \phi \in (-\pi, \pi), \tau \in (0, 0.6)\}
+```
+
+### Base Hamiltonian:
+
+```math
+H_{\text{base}} = \Delta \sigma_z + \Omega (\cos\phi \, \sigma_x + \sin\phi \, \sigma_y)
+```
+
+### High Off-Resonant Error with Small Pulse-Length Error:
+
+Off-Resonant Error (ORE) corresponds to the static error associated to the system disorder. Specifically, it is a unit gaussian such that
+```math
+\delta \sim N(0, 1)
+```
+```math
+H = H_{\text{base}} + \delta \sigma_z
+```
+We are assuming the order of magnitude of the ORE is comparable to the maximum Rabi Frequency $\Omega_\max$.
+
+Pulse-Length Error (PLE) corresponds to static error associated to the pulse width. It is a small gaussian such that
+```math
+\epsilon \sim N(0, 1) \cdot 0.05
+```
+```math
+\tau \rightarrow \tau \cdot (1 + \epsilon)
+```
+We are assuming that we are working with high-performance pulse devices such that the magnitude of PLE is roughly 5% of $\Omega_\max$.
+
+### Resulting Unitary:
+
+```math
+U = \exp(-i \cdot (H_{\text{base}} + \delta \sigma_z) \cdot \tau \cdot (1 + \epsilon))
+```
+
+
+---
+
+
+## 📊 Single-Qubit Result: Fidelity vs ORE Standard Deviation
 
 The following table shows the average fidelity and standard error for each target unitary under varying off-resonant error (ORE) standard deviation. PLE error `epsilon_std` was set at 0.05.
 
@@ -190,6 +191,23 @@ The following plots show fidelity contours for different target unitaries under 
 
 ---
 
+## ⚛️ Two Qubit Setting with Off-Resonant Error
+
+### Parameter Space (TODO: Need to verify for solid-state spin ensemble systems)
+
+```math
+P = P_{\text{single}}^1 + P_{\text{single}}^2 + \{ J_{1, 2} \}
+```
+
+$J_{1, 2}$ is the tunable coupler parameter.
+
+### Base Hamiltonian:
+
+```math
+H_{\text{base}} = H^1_{\text{base}} + H^2_{\text{base}} + J_{1, 2} \sigma^1_z\sigma^2_z 
+```
+
+---
 
 ## 📌 Notes
 
