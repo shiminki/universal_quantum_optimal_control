@@ -16,7 +16,7 @@ Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[
 * Target unitary $U_{\text{target}} \in \mathbb{C}^{2^n \times 2^n}$
 * Pulse parameter space $\mathcal{P}$
 * Static error model $E \sim p(E)$
-* Unitary generator $g(p, \epsilon)$ that creates the unitary from pulse $p$ with error $\epsilon$. $p$ is a $(L, P)$ tensor, where $L$ is the total length of composite pulse. 
+* Unitary generator $g(p, \epsilon)$ that creates the unitary from pulse $p \in \mathcal{P}$ with error $\epsilon$. 
 
 ### Objective:
 
