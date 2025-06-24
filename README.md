@@ -18,6 +18,10 @@ Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[
 * Static error model $\vec{\epsilon} \sim p(E)$
 * Unitary generator $U_{\text{out}} \leftarrow g(p, \vec{\epsilon})$ that creates the unitary from pulse $p \in \mathcal{P}$ with error $\vec{\epsilon}$. 
 
+### Problem Output:
+
+* Length L pulse sequence $p_1, ... p_L$.
+
 ### Objective:
 
 Maximize expected fidelity:
