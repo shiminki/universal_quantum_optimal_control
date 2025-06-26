@@ -15,7 +15,7 @@ Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[
 * Number of qubits $n$
 * Target unitary $U_{\text{target}} \in \mathbb{C}^{2^n \times 2^n}$
 * Pulse parameter space $\mathcal{P}$
-* Static error model $\vec{\epsilon} \sim p(E)$
+* Static error model $\vec{\epsilon} \sim p(\cdot |\vec{\Sigma})$ where $\vec{\Sigma}$ quantifies the standard deviation.
 * Unitary generator $U_{\text{out}} \leftarrow g(p, \vec{\epsilon})$ that creates the unitary from pulse $p \in \mathcal{P}$ with error $\vec{\epsilon}$. 
 
 ### Problem Output:
@@ -27,7 +27,7 @@ Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[
 Maximize expected fidelity:
 
 ```math
-\mathbb{E}_{\vec{\epsilon} \sim p(E)}\left[ \frac{\left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 + d}{d^2 + d}\right]
+\mathbb{E}_{\vec{\epsilon} \sim p(\cdot |\vec{\Sigma})}\left[ \frac{\left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 + d}{d^2 + d}\right]
 ```
 
 where 
@@ -123,7 +123,7 @@ P_{\text{single}} = \{ \Delta \in (-5, 5), \Omega \in (0, 1), \phi \in (-\pi, \p
 ### Base Hamiltonian:
 
 ```math
-H_{\text{base}} = \Delta \sigma_z + \Omega (\cos\phi \, \sigma_x + \sin\phi \, \sigma_y)
+H_{\text{base}} = \frac{1}{2} \bigg[\Delta \sigma_z + \Omega (\cos\phi \, \sigma_x + \sin\phi \, \sigma_y)\bigg]
 ```
 
 ### High Off-Resonant Error with Small Pulse-Length Error:

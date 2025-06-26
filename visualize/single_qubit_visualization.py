@@ -40,7 +40,6 @@ def visualize(target_name, U_target, pulse, name, save_csv=False):
     U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
     pulses_plot = torch.stack([pulse]).repeat_interleave(M, dim=0)
 
-
     U_out_plot = batched_unitary_generator(pulses_plot, errors_mc)
     F = fidelity(U_out_plot, U_target_plot, 1)
 
@@ -84,11 +83,6 @@ def visualize(target_name, U_target, pulse, name, save_csv=False):
     plt.xlabel(r"$\delta / \Omega_{\max} \sim N(0, 1)$")
     plt.ylabel(r"$\epsilon / \Omega_{\max} \sim N(0, 0.05^2)$")
     plt.title(f"Fidelity Surface for {target_name} of {name}\nE[F] = {F_mean:.4f} +/- {F_err:.4f}\nTotal Evolution Time: {total_time:.2f} pi")
-    # plt.suptitle(f"Fidelity Surface for {target_name}")
-    # plt.title(
-    #     fr"$\mathbb{{E}}_{{\sigma_\delta = 1,\ \sigma_\epsilon = 0.05}}[F] = {F.mean().item():.4f}$",
-    #     # fontsize=18
-    # )
     plt.grid(True)
     plt.show()
 
@@ -134,15 +128,15 @@ if __name__ == "__main__":
 
     fidelities = {}
 
-    for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-        fidelities[target_name] = get_avg_fidelity(U_target, pulse)
+    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+    #     fidelities[target_name] = get_avg_fidelity(U_target, pulse)
     
-    df = pd.DataFrame(fidelities)
-    df.to_csv("fidelities.csv")
+    # df = pd.DataFrame(fidelities)
+    # df.to_csv("fidelities.csv")
     
 
-    for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-        visualize(target_name, U_target, pulse, "Transformer CP", True)
+    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+    #     visualize(target_name, U_target, pulse, "Transformer CP", True)
 
 
 
@@ -156,3 +150,28 @@ if __name__ == "__main__":
         visualize(target_name, U_target, pulse, "SCORE4")
 
 
+    data = [
+        [0.7598, 1.1145, -0.8872, -0.0167, -1.5056, 0.4233, -0.0248, 2.9724, -3.0918],
+        [1.1516, 0.3675, -2.2800, 0.5743, 2.0933, 0.2061, -1.6437, -0.7061, 0.9273],
+        [0.6220, 0.6251, 1.1929, 1.6412, -0.8985, -1.5013, -0.5969, -0.6176, 1.2448],
+        [2.7879, 1.8734, -2.8629, 1.2522, 2.4905, -1.1821, -1.8967, -2.1757, 2.4733],
+        [-2.8126, -2.7701, -1.0354, -2.8256, 2.3944, -1.7776, -0.7125, 0.5963, -1.4869],
+        [-1.2035, 1.7050, 2.0577, -0.7816, 0.7853, -1.3623, 0.9122, 0.0378, 2.7522]
+    ]
+
+    for i, phis in enumerate(data):
+        
+        Deltas = [0] * len(phis)
+        Omegas = [1] * len(phis)
+        taus = [torch.pi] * len(phis)
+
+        pulse = torch.tensor([
+            Deltas, Omegas, phis, taus
+        ]).T
+
+        U_target = torch.tensor([
+            [0, 1],
+            [1, 0]
+        ], dtype=torch.cfloat)
+
+        visualize("X(pi)", U_target, pulse, f"NN_{i}")
