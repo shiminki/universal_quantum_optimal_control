@@ -8,7 +8,7 @@ This project develops a machine learning framework for generating composite puls
 
 ### Goal
 
-Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[p_1, p_2, ..., p_L] \in \mathcal{P}^L$, where the resulting unitary $U_{\text{out}}$ is robust against a static error $\vec{\epsilon} \sim p(E)$. The primary objective is to optimize composite pulse sequence for a **large** disorder.
+Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[p_1, p_2, ..., p_L] \in \mathcal{P}^L$, where the resulting unitary $U_{\text{out}}$ is robust against a static error $\vec{\epsilon} \sim p(\cdot |\vec{\Sigma})$. The primary objective is to optimize composite pulse sequence for a **large** disorder.
 
 ### Problem Input:
 

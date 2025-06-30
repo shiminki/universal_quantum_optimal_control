@@ -248,9 +248,14 @@ def main():
 
 
     # Load model parameters from external JSON
-    model_params = load_model_params("run/single_qubit/model_params.json")
+    model_params = load_model_params("train/single_qubit/model_params.json")
 
     model = CompositePulseTransformerEncoder(**model_params)
+
+    # load pretrained module
+
+    model_path = "weights/single_qubit_control/_err_{_delta_std_tensor(1.),_epsilon_std_0.05}.pt"
+    model.load_state_dict(torch.load(model_path))
 
     trainer_params = {
         "model" : model, "unitary_generator" : batched_unitary_generator,
@@ -270,11 +275,14 @@ def main():
 
 
     # 5% PLE error
-    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.1, 3.05, 0.1)]
+    # error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.1, 3.05, 0.1)]
+    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(1.1, 1.5, 0.2)]
+    eval_error_param = {"delta_std": 1.0, "epsilon_std": 0.05}
 
     trainer.train(
         train_set, 
-        error_params_list=error_params_list, 
+        error_params_list=error_params_list,
+        eval_error_param=eval_error_param,
         epochs=args.num_epoch,
         save_path=args.save_path
     )
