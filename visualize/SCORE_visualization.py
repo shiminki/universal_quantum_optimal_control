@@ -37,9 +37,9 @@ angle_vec_dict = {
 
 unitaries = {
     "X(pi)" : [(1, 0)],
-    "X(pi/2)" : [(1/2, 0)],
-    "H" : [(1, 0), (1/2, 1/2)],
-    "Z(pi/4)" : [(1, 0), (1/2, 1/2), (1/4, 0), (1, 0), (1/2, 1/2)]
+    "X(pi-2)" : [(1/2, 0)],
+    "Hadamard" : [(1, 0), (1/2, 1/2)],
+    "Z(pi-4)" : [(1, 0), (1/2, 1/2), (1/4, 0), (1, 0), (1/2, 1/2)]
 }
 
 
@@ -87,6 +87,11 @@ def build_SCORE_pulses():
             pulses.append(SCOREn_config(n, phi * np.pi))
         
         SCORE_pulses.append(torch.stack(pulses))
+        x = SCORE_pulses[-1]
+        x = x.reshape(-1, x.shape[2]) 
+        print(x)
+        df = pd.DataFrame(x.to(torch.float))
+        df.to_csv(f"weights/single_qubit_control/{target}_SCORE_pulse.csv", index=False)
 
     return [x.reshape(-1, x.shape[-1]) for x in SCORE_pulses]
 

@@ -59,7 +59,7 @@ class CompositePulseTransformerEncoder(nn.Module):
         n_layers: int = 12,
         n_heads: int = 4,
         dropout: float = 0.1,
-        tokenizer: nn.Linear=None # (2 * self.dim ** 2, d_model)
+        score_emb: int = 4
     ) -> None:
         
         super().__init__()
@@ -78,7 +78,7 @@ class CompositePulseTransformerEncoder(nn.Module):
         self.d_model = d_model
         
         # Projection of flattened (real+imag) unitary → d_model
-        self.unitary_proj = nn.Linear(2 * self.dim ** 2, d_model)
+        self.unitary_proj = nn.Linear(score_emb * 2 * self.dim ** 2, d_model)
 
         # Transformer Encoder Model
 

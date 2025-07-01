@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 
-from model.model_encoder import CompositePulseTransformerEncoder
+from model.model import CompositePulseTransformerEncoder
 
 
 __all__ = ["CompositePulseTrainer"]
@@ -52,8 +52,10 @@ class CompositePulseTrainer:
     # Training loop utilities
     # ------------------------------------------------------------------
 
-    def train_epoch(self, U_target: torch.Tensor, error_distribution) -> float:
+    def train_epoch(self, U_emb: torch.Tensor, U_target: torch.Tensor, error_distribution) -> float:
         """One optimisation step (epoch).
+
+        U_emb is the SCORE expansion of U_target
 
         The Monte‑Carlo dimension is fused into the batch so the network is
         executed **once** per epoch, eliminating thousands of CUDA launches
@@ -63,10 +65,11 @@ class CompositePulseTrainer:
         # Back‑prop
         self.optimizer.zero_grad()
 
+        U_emb = U_emb.to(self.device)
         U_target = U_target.to(self.device)
 
         # Forward pass once to obtain pulse parameters
-        pulses = self.model(U_target)  # (B, L, P)
+        pulses = self.model(U_emb)  # (B, L, P)
 
         # ──────────────────────────────────────────────────────────────
         # Vectorised Monte‑Carlo sampling
@@ -96,12 +99,13 @@ class CompositePulseTrainer:
     # ------------------------------------------------------------------
 
     @torch.no_grad()
-    def evaluate(self, U_target_batch: torch.Tensor, error_distribution) -> float:
+    def evaluate(self, U_emb_batch: torch.Tensor, U_target_batch: torch.Tensor, error_distribution) -> float:
         """Compute mean fidelity on *U_target_batch* (no grad)."""
         self.model.eval()
 
+        U_emb = U_emb_batch.to(self.device)
         U_target = U_target_batch.to(self.device)
-        pulses = self.model(U_target)
+        pulses = self.model(U_emb)
         
         # ──────────────────────────────────────────────────────────────
         # Vectorised Monte‑Carlo sampling
@@ -133,7 +137,7 @@ class CompositePulseTrainer:
     def train(
         self,
         train_set: torch.Tensor,
-        *,
+        eval_set: torch.Tensor,
         error_params_list: List[Dict],  # iterate from small → large error
         eval_error_param: Dict = None,
         epochs: int = 100,
@@ -156,9 +160,9 @@ class CompositePulseTrainer:
 
             with tqdm(total=epochs, desc=f"ϵ = {error_params}", dynamic_ncols=True) as pbar:
                 for epoch in range(1, epochs + 1):
-                    train_loss = self.train_epoch(train_set, error_distribution)
+                    train_loss = self.train_epoch(train_set, eval_set, error_distribution)
                     
-                    eval_fid = self.evaluate(train_set, eval_dist)
+                    eval_fid = self.evaluate(train_set, eval_set, eval_dist)
 
                     # Track best model
                     if eval_fid > self.best_fidelity:

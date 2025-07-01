@@ -138,8 +138,8 @@ if __name__ == "__main__":
     # df.to_csv("fidelities.csv")
     
 
-    for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-        visualize(target_name, U_target, pulse, "Transformer CP", True)
+    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+    #     visualize(target_name, U_target, pulse, "Transformer CP", True)
 
 
 
