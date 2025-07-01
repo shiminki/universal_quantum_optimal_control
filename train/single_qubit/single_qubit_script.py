@@ -241,7 +241,7 @@ def build_score_emb_dataset(phi=0) -> List[torch.Tensor]:
     for angle in angle_vec_dict:
         unitaries = []
         for theta in angle_vec_dict[angle]:
-            unitaries.append(_rotation_unitary((1, 0, 0), theta))
+            unitaries.append(_rotation_unitary((1, 0, 0), theta * math.pi))
         dataset.append(torch.stack(unitaries).view(2 * len(angle_vec_dict[angle]), 2))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -249,7 +249,7 @@ def build_score_emb_dataset(phi=0) -> List[torch.Tensor]:
     SCORE_tensors = torch.stack(dataset).to(device)
 
     original_tensors = torch.stack([
-        _rotation_unitary((1, 0, 0), angle)
+        _rotation_unitary((1, 0, 0), angle * math.pi)
         for angle in angle_vec_dict
     ]).to(device)
 
