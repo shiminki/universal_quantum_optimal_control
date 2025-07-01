@@ -8,10 +8,10 @@ import torch
 import pandas as pd
 
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d import Axes3D
 
 from tqdm import tqdm
-
 
 # Add to the top of visualize/single_qubit_visualization.py
 import sys, os
@@ -115,10 +115,13 @@ if __name__ == "__main__":
     M = 10000
 
     pulse_path = "weights/single_qubit_control/_err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
+    # pulse_path = "weights/single_qubit_control/_err_{_delta_std_tensor(1.3000),_epsilon_std_0.05}_pulses.pt"
     
 
     pulses = torch.load(pulse_path) # [4, 100, 4]
     # pulses_mc = pulses.repeat_interleave(M, dim=0)
+
+    print(pulses.shape)
 
     train_set = build_dataset() # [4, 2, 2]
 
@@ -135,8 +138,8 @@ if __name__ == "__main__":
     # df.to_csv("fidelities.csv")
     
 
-    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-    #     visualize(target_name, U_target, pulse, "Transformer CP", True)
+    for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+        visualize(target_name, U_target, pulse, "Transformer CP", True)
 
 
 

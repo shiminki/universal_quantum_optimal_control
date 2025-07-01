@@ -135,6 +135,7 @@ class CompositePulseTrainer:
         train_set: torch.Tensor,
         *,
         error_params_list: List[Dict],  # iterate from small → large error
+        eval_error_param: Dict = None,
         epochs: int = 100,
         save_path: str | Path | None = None,
         plot: bool = False
@@ -146,13 +147,18 @@ class CompositePulseTrainer:
         for error_params in error_params_list:
             self.best_fidelity = 0.0
             error_distribution = self.get_error_distribution(error_params=error_params)
+            if eval_error_param is not None:
+                eval_dist = self.get_error_distribution(error_params = eval_error_param)
+            else:
+                eval_dist = error_distribution
 
             fidelity_list = []
 
             with tqdm(total=epochs, desc=f"ϵ = {error_params}", dynamic_ncols=True) as pbar:
                 for epoch in range(1, epochs + 1):
                     train_loss = self.train_epoch(train_set, error_distribution)
-                    eval_fid = self.evaluate(train_set, error_distribution)
+                    
+                    eval_fid = self.evaluate(train_set, eval_dist)
 
                     # Track best model
                     if eval_fid > self.best_fidelity:
