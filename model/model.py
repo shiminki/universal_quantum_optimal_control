@@ -134,7 +134,10 @@ class CompositePulseTransformerEncoder(nn.Module):
         self, 
         U_target: torch.Tensor
     ) -> torch.Tensor:
-        """Generate pulses for every target unitary *U_target* (B, d, d)."""
+        """
+        Generate pulses for every target unitary *U_target* (B, L, d, d).
+        L represents the length of the SCORE composite pulse
+        """
 
         B = U_target.shape[0]
         L = U_target.shape[1] # Length of SCORE pulse

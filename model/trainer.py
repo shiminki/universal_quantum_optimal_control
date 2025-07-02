@@ -1,6 +1,7 @@
 import math
 from typing import Callable, Dict, Sequence, Tuple, Optional, List, Union
 from pathlib import Path
+import os
 
 import torch
 import torch.nn as nn
@@ -190,6 +191,8 @@ class CompositePulseTrainer:
                     plt.title(f"Evaluation Fidelity vs Epoch with \nError: {error_params}")
                     plt.grid(True)
                     plt.tight_layout()
+                    tag = os.path.join(save_path, f"err_{str(error_params).replace(' ', '')}")
+                    plt.savefig(f"{tag}_loss_plot.png")
                     plt.show()
 
 
@@ -199,7 +202,7 @@ class CompositePulseTrainer:
 
             # Persist
             if save_path is not None:
-                tag = f"{save_path}_err_{str(error_params).replace(' ', '')}"
+                tag = os.path.join(save_path, f"err_{str(error_params).replace(' ', '')}")
                 self._save_weight(f"{tag}.pt")
                 self._save_pulses(f"{tag}_pulses.pt", train_set)
 
