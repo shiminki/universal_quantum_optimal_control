@@ -116,7 +116,8 @@ class CompositePulseTransformerEncoder(nn.Module):
             d_model=d_model,
             nhead=n_heads,
             dim_feedforward=4*d_model,
-            dropout=dropout
+            dropout=dropout,
+            batch_first=True
         )
         if n_layers is None:
             n_layers = 4 * max_pulses
@@ -146,7 +147,7 @@ class CompositePulseTransformerEncoder(nn.Module):
         D = self.d_model
 
         # Encode source (unitary) – shape (B, d_model)
-        emb = self.unitary_proj(_to_real_vector(U_target))  # (B, D)
+        emb = self.unitary_proj(_to_real_vector(U_target))  # (B, L, D)
 
         # Add sinusoidal positional encoding (L, D) → broadcast to (B, L, D)
         pos_emb = sinusoidal_positional_encoding(L, D, device=emb.device)
