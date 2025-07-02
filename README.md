@@ -219,7 +219,7 @@ H_{\text{base}} = H^1_{\text{base}} + H^2_{\text{base}} + J_{1, 2} \sigma^1_z\si
 * Pulse space $\mathcal{P}$ can be continuous (e.g., $\Delta, \Omega, \phi, t$)
 * Custom loss is used such that it has zero gradient at $F = 1$ and sharp gradient at $F < 0.99$. The loss function is 
 
-$$l(F; \tau=0.99, k=100) = \log(1 + \exp(-k \cdot (F - \tau))\cdot (1 - F)$$
+$$L(F; \tau=0.99, k=100) = \log(1 + \exp(-k \cdot (F - \tau))\cdot (1 - F)$$
 
 ---
 

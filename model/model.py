@@ -17,13 +17,15 @@ __all__ = ["CompositePulseTransformerEncoder"]
 ###############################################################################
 
 def _to_real_vector(U: torch.Tensor) -> torch.Tensor:
-    """Flatten a complex matrix into a real‑valued vector (…, 2*d*d)."""
-    real = U.real
-    imag = U.imag
-    return torch.cat([
-        real.reshape(*real.shape[:-2], -1),
-        imag.reshape(*imag.shape[:-2], -1)
-    ], dim=-1)
+    """Flatten a complex matrix into a real‑valued vector with alternating real and imag components (…, 2*d*d)."""
+    real = U.real.reshape(*U.shape[:-2], -1)  # shape: (..., d*d)
+    imag = U.imag.reshape(*U.shape[:-2], -1)  # shape: (..., d*d)
+
+    stacked = torch.stack((real, imag), dim=-1)  # shape: (..., d*d, 2)
+    interleaved = stacked.reshape(*U.shape[:-2], -1)  # shape: (..., 2*d*d)
+
+    return interleaved
+
 
 
 def fidelity(U_out: torch.Tensor, U_target: torch.Tensor) -> torch.Tensor:
