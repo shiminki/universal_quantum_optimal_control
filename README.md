@@ -186,7 +186,7 @@ The following plots show fidelity contours for different target unitaries under 
   <img src="figures/Fidelity contour plot/X(pi-2).png" width="48%" alt="Transformer X(pi-2)">
   <img src="figures/Fidelity contour plot/SCORE_4_X(pi-2).png" width="48%" alt="SCORE X(pi-2)">
   <br>
-  <img src="figures/Fidelity contour plot/Fidelity contour plot/Hadamard.png" width="48%" alt="Transformer Hadamard">
+  <img src="figures/Fidelity contour plot/Hadamard.png" width="48%" alt="Transformer Hadamard">
   <img src="figures/Fidelity contour plot/SCORE_4_Hadamard.png" width="48%" alt="SCORE Hadamard">
   <img src="figures/Fidelity contour plot/Z(pi-4).png" width="48%" alt="Transformer Z(pi-4)">
   <img src="figures/Fidelity contour plot/SCORE_4_Z(pi-4).png" width="48%" alt="SCORE Z(pi-4)">
@@ -217,7 +217,9 @@ H_{\text{base}} = H^1_{\text{base}} + H^2_{\text{base}} + J_{1, 2} \sigma^1_z\si
 
 * Supports general $n$-qubit systems
 * Pulse space $\mathcal{P}$ can be continuous (e.g., $\Delta, \Omega, \phi, t$)
-* Default loss is $-\log \mathbb{E}[F(U_{\text{out}}, U_{\text{target}})]$
+* Custom loss is used such that it has zero gradient at $F = 1$ and sharp gradient at $F < 0.99$. The loss function is 
+
+$$l(F; \tau=0.99, k=100) = \log(1 + \exp(-k \cdot (F - \tau))\cdot (1 - F)$$
 
 ---
 

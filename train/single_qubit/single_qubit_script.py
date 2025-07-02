@@ -184,7 +184,6 @@ def infidelity_loss(U_out, U_target, fidelity_fn, num_qubits):
     return 1 - torch.mean(fidelity_fn(U_out, U_target, num_qubits))
 
 
-
 def sharp_loss(U_out, U_target, fidelity_fn, num_qubits, tau=0.99, k=100):
     F = torch.mean(fidelity_fn(U_out, U_target, num_qubits))
     return custom_loss(F, tau, k)
@@ -258,7 +257,7 @@ def build_score_emb_dataset(phi=0) -> List[torch.Tensor]:
 
         dataset.append(torch.stack(unitaries))
 
-        
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     SCORE_tensors = torch.stack(dataset).to(device)
