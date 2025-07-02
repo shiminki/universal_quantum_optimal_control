@@ -89,7 +89,6 @@ def build_SCORE_pulses():
         SCORE_pulses.append(torch.stack(pulses))
         x = SCORE_pulses[-1]
         x = x.reshape(-1, x.shape[2]) 
-        print(x)
         df = pd.DataFrame(x.to(torch.float))
         df.to_csv(f"weights/single_qubit_control/{target}_SCORE_pulse.csv", index=False)
 

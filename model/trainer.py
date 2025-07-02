@@ -192,7 +192,9 @@ class CompositePulseTrainer:
                     plt.grid(True)
                     plt.tight_layout()
                     tag = os.path.join(save_path, f"err_{str(error_params).replace(' ', '')}")
-                    plt.savefig(f"{tag}_loss_plot.png")
+                    fig_path = f"{tag}_loss_plot.png"
+                    Path(fig_path).parent.mkdir(parents=True, exist_ok=True)
+                    plt.savefig(fig_path)
                     plt.show()
 
 

@@ -87,7 +87,7 @@ def animate_bloch_evolution(bloch_vectors, name, pulse_info, delta, epsilon, sav
 
 
     ani = FuncAnimation(fig, update, frames=len(bloch_vectors), repeat=False)
-    ani.save(save_path, fps=10, dpi=200)
+    ani.save(save_path, fps=40, dpi=200)
     print(f"Video saved to {save_path}")
 
 
