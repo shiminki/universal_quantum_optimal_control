@@ -71,7 +71,7 @@ def sinusoidal_positional_encoding(length: int, d_model: int, device: torch.devi
 
 
 ###############################################################################
-# Model
+# Model with SCORE Embedding
 ###############################################################################
 
 class CompositePulseTransformerEncoder(nn.Module):
@@ -156,8 +156,6 @@ class CompositePulseTransformerEncoder(nn.Module):
 
         # Pass through transformer encoder
         logit = self.encoder(emb)  # (B, L, D)
-
-
         logit = self.head(logit)  # (B, L, P)
 
         pulses_norm = logit[:, -1, :]
@@ -174,3 +172,4 @@ class CompositePulseTransformerEncoder(nn.Module):
         pulses = low + (high - low) * pulses_unit  # (B, L, P)
 
         return pulses
+

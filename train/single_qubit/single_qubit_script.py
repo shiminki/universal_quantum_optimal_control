@@ -319,7 +319,10 @@ def main():
 
     trainer = CompositePulseTrainer(**trainer_params)
     # train_set = build_dataset()
+    # eval_set = build_dataset()
     train_set, eval_set = build_score_emb_dataset()
+
+    print(train_set.shape, eval_set.shape)
 
     #####################
     ## Training #########

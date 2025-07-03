@@ -137,11 +137,24 @@ def analyze(pulse_dir, U_target, name, delta, epsilon):
 
 # Example usage
 if __name__ == "__main__":
-    from train.single_qubit.single_qubit_script import build_dataset
-    U_targets = build_dataset()
-    U_target_names = ["X(pi)", "X(pi-2)", "Hadamard", "Z(pi-4)"]
+    from train.single_qubit.single_qubit_script import build_dataset, build_score_emb_dataset
+    SCORE_embedding = True
+
+    if SCORE_embedding:
+        _, U_targets = build_score_emb_dataset()
+        U_target_names = ["0-25", "0-33", "0-50", "0-67", "0-75", "1-00"]
+    else:
+        U_targets = build_dataset()
+        U_target_names = ["X(pi)", "X(pi-2)", "Hadamard", "Z(pi-4)"]  
+
+
     for U_target, name in zip(U_targets, U_target_names):
+        if SCORE_embedding:
+            title = f"0.{name.split('-')[1]}pi"
+        else:
+            title = name
         for delta in (0, 0.5, -0.5):
             pulse_dir = f"weights/single_qubit_control/{name}_pulse.csv"
             print(name)
-            analyze(pulse_dir, U_target, name, delta, 0)
+
+            analyze(pulse_dir, U_target, title, delta, 0)
