@@ -17,13 +17,15 @@ __all__ = ["CompositePulseTransformerEncoder"]
 ###############################################################################
 
 def _to_real_vector(U: torch.Tensor) -> torch.Tensor:
-    """Flatten a complex matrix into a real‑valued vector (…, 2*d*d)."""
-    real = U.real
-    imag = U.imag
-    return torch.cat([
-        real.reshape(*real.shape[:-2], -1),
-        imag.reshape(*imag.shape[:-2], -1)
-    ], dim=-1)
+    """Flatten a complex matrix into a real‑valued vector with alternating real and imag components (…, 2*d*d)."""
+    real = U.real.reshape(*U.shape[:-2], -1)  # shape: (..., d*d)
+    imag = U.imag.reshape(*U.shape[:-2], -1)  # shape: (..., d*d)
+
+    stacked = torch.stack((real, imag), dim=-1)  # shape: (..., d*d, 2)
+    interleaved = stacked.reshape(*U.shape[:-2], -1)  # shape: (..., 2*d*d)
+
+    return interleaved
+
 
 
 def fidelity(U_out: torch.Tensor, U_target: torch.Tensor) -> torch.Tensor:
@@ -37,6 +39,35 @@ def fidelity(U_out: torch.Tensor, U_target: torch.Tensor) -> torch.Tensor:
     inner = torch.einsum("bji,bij->b", U_out.conj(), U_target)  # shape [B]
 
     return (inner.conj() * inner / d ** 2).real                        # shape [B] or scalar
+
+
+
+
+###############################################################################
+# Positional Embedding
+###############################################################################
+
+
+def sinusoidal_positional_encoding(length: int, d_model: int, device: torch.device) -> torch.Tensor:
+    """
+    Generate sinusoidal positional encoding.
+
+    Args:
+        length: sequence length (e.g., max_pulses)
+        d_model: embedding dimension
+        device: torch device
+
+    Returns:
+        Tensor of shape (length, d_model)
+    """
+    position = torch.arange(length, dtype=torch.float, device=device).unsqueeze(1)  # (L, 1)
+    div_term = torch.exp(torch.arange(0, d_model, 2, device=device).float() * (-math.log(10000.0) / d_model))  # (d_model/2)
+
+    pe = torch.zeros(length, d_model, device=device)  # (L, D)
+    pe[:, 0::2] = torch.sin(position * div_term)
+    pe[:, 1::2] = torch.cos(position * div_term)
+
+    return pe  # (L, D)
 
 
 ###############################################################################
@@ -58,8 +89,7 @@ class CompositePulseTransformerEncoder(nn.Module):
         d_model: int = 256,
         n_layers: int = 12,
         n_heads: int = 4,
-        dropout: float = 0.1,
-        tokenizer: nn.Linear=None # (2 * self.dim ** 2, d_model)
+        dropout: float = 0.1
     ) -> None:
         
         super().__init__()
@@ -86,7 +116,8 @@ class CompositePulseTransformerEncoder(nn.Module):
             d_model=d_model,
             nhead=n_heads,
             dim_feedforward=4*d_model,
-            dropout=dropout
+            dropout=dropout,
+            batch_first=True
         )
         if n_layers is None:
             n_layers = 4 * max_pulses
@@ -106,18 +137,40 @@ class CompositePulseTransformerEncoder(nn.Module):
         self, 
         U_target: torch.Tensor
     ) -> torch.Tensor:
-        """Generate pulses for every target unitary *U_target* (B, d, d)."""
-    
-        # Encode source (unitary) – shape (B, 1, d_model)
-        emb = self.unitary_proj(_to_real_vector(U_target)).unsqueeze(1)
+        """
+        Generate pulses for every target unitary *U_target* (B, L, d, d).
+        L represents the length of the SCORE composite pulse
+        """
 
-        logit = self.encoder(emb) # (B, 1, d_model)
+        B = U_target.shape[0]
+        L = U_target.shape[1] # Length of SCORE pulse
+        D = self.d_model
 
-        pulses_norm = self.head(logit)  # (B, 1, max_pulses * param_dim)
+        # Encode source (unitary) – shape (B, d_model)
+        emb = self.unitary_proj(_to_real_vector(U_target))  # (B, L, D)
 
-        # Map to physical ranges: sigmoid → (0,1) → (low, high)
-        pulses_norm = pulses_norm.view(U_target.shape[0], self.max_pulses, self.param_dim)
-        pulses_unit = pulses_norm.sigmoid()  # (B, L, P)
-        low, high = self.param_ranges[:, 0].to(pulses_unit.device), self.param_ranges[:, 1].to(pulses_unit.device)
-        pulses = low + (high - low) * pulses_unit
+        # Add sinusoidal positional encoding (L, D) → broadcast to (B, L, D)
+        pos_emb = sinusoidal_positional_encoding(L, D, device=emb.device)
+
+        emb = emb + pos_emb.unsqueeze(0)  # (B, L, D)
+
+        # Pass through transformer encoder
+        logit = self.encoder(emb)  # (B, L, D)
+
+
+        logit = self.head(logit)  # (B, L, P)
+
+        pulses_norm = logit[:, -1, :]
+
+
+        # Reshape to (B, L, max_pulse, num_param)
+        pulses_norm = pulses_norm.view(B, self.max_pulses, self.param_dim)
+
+        # Map to physical parameter range
+        pulses_unit = pulses_norm.sigmoid()
+        low = self.param_ranges[:, 0].to(pulses_unit.device)
+        high = self.param_ranges[:, 1].to(pulses_unit.device)
+
+        pulses = low + (high - low) * pulses_unit  # (B, L, P)
+
         return pulses

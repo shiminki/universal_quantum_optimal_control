@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 from tqdm import tqdm
+from scipy.stats import linregress
 
 
 # Add to the top of visualize/single_qubit_visualization.py
@@ -35,7 +36,7 @@ def plot_fidelity_by_std(target_name, U_target, pulse, name):
 
     fidelities = {}
 
-    delta_vals = torch.arange(0, 1.0, 0.01)
+    delta_vals = torch.arange(0.01, 2.0, 0.01)
 
     for delta_std in tqdm(delta_vals):
         errors_mc = get_ore_ple_error_distribution(M, delta_std, 0.05)
@@ -49,23 +50,55 @@ def plot_fidelity_by_std(target_name, U_target, pulse, name):
         F_err = F.std().item() / np.sqrt(M)
 
         fidelities[delta_std] = (F_mean, F_err)
+
         
     # Extract values for plotting
     delta_vals = list(fidelities.keys())
-    F_means = [1 - fidelities[d][0] for d in delta_vals]
+    F_means = [fidelities[d][0] for d in delta_vals]
+    inF_means = [1 - fidelities[d][0] for d in delta_vals]
     F_errs = [fidelities[d][1] for d in delta_vals]
 
-    # Plotting
+    # Plotting fidelity vs delta_std
     plt.figure(figsize=(8, 6))
     plt.errorbar(delta_vals, F_means, yerr=F_errs, fmt='o-', capsize=4)
+
+    plt.xlabel(r"Std$(\delta / \Omega_{\max})$")
+    plt.ylabel("Expected Fidelity")
+    plt.title(
+        f"Fidelity curve for {target_name} of {name}\n"
+        f"Total Evolution Time: {total_time:.2f} π"
+    )
+    plt.grid(True)
+    plt.tight_layout()
+
+    plt.ylim(0.6, 1)
+    plt.show()
+
+    # log-linear fit for power-law dependence
+    log_delta = np.log(delta_vals)
+    log_inF = np.log(inF_means)
+    slope, intercept, r_value, p_value, std_err = linregress(log_delta, log_inF)
+
+    # Create fitted values for plotting
+    delta_line = torch.linspace(0.01, 2, 500)
+    inF_line = torch.exp(intercept + slope * torch.log(delta_line))
+
+    
+
+    # Plotting log(infidelity) vs delta_std
+    plt.figure(figsize=(8, 6))
+    plt.errorbar(delta_vals, inF_means, yerr=F_errs, fmt='o-', capsize=4)
+    plt.plot(delta_line, inF_line, '--', label=fr"Fit: Infidelity $\sim \sigma_\delta^{{{slope:.2f}}}$")
 
     plt.xlabel(r"Std$(\delta / \Omega_{\max})$")
     plt.ylabel("Expected Infidelity")
     plt.title(
         f"Infidelity curve for {target_name} of {name}\n"
-        f"Total Evolution Time: {total_time:.2f} π"
+        f"Total Evolution Time: {total_time:.2f} π\n"
+        fr"Fit: Infidelity $\sim \sigma_\delta^{{{slope:.2f}}}$"
     )
     plt.semilogy()
+    plt.semilogx()
     plt.grid(True)
     plt.tight_layout()
 

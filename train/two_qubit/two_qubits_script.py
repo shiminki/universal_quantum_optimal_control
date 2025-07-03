@@ -15,7 +15,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
-from model.model_encoder import CompositePulseTransformerEncoder
+from model.model import CompositePulseTransformerEncoder
 from model.trainer import CompositePulseTrainer
 
 

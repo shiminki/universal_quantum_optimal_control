@@ -1,4 +1,4 @@
-from model.model_encoder import CompositePulseTransformerEncoder
+from model.model import CompositePulseTransformerEncoder
 from model.trainer import CompositePulseTrainer
 from train.single_qubit.single_qubit_script import *
 import torch

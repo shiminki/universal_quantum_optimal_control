@@ -41,7 +41,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
-from model.model_encoder import CompositePulseTransformerEncoder
+from model.model import CompositePulseTransformerEncoder
 from model.trainer import CompositePulseTrainer
 
 
@@ -184,6 +184,13 @@ def infidelity_loss(U_out, U_target, fidelity_fn, num_qubits):
     return 1 - torch.mean(fidelity_fn(U_out, U_target, num_qubits))
 
 
+def sharp_loss(U_out, U_target, fidelity_fn, num_qubits, tau=0.99, k=100):
+    F = torch.mean(fidelity_fn(U_out, U_target, num_qubits))
+    return custom_loss(F, tau, k)
+
+def custom_loss(x, tau=0.99, k=100):
+    return torch.log(1 + torch.exp(-k * (x - tau))) * (1 - x)
+
 
 ###############################################################################
 # data
@@ -216,6 +223,51 @@ def build_dataset() -> List[torch.Tensor]:
         _rotation_unitary(axis, theta) 
         for (axis, theta) in axis_angles
     ]).to(device)
+
+
+def build_score_emb_dataset(phi=0) -> List[torch.Tensor]:
+    angle_vec_dict = {
+        1/4 : [1.34820, 1.32669, 1.77042, 2.16800],
+        1/3 : [1.41901, 1.35864, 1.77664, 2.13759],
+        1/2 : [1.55280, 1.42267, 1.78586, 2.07559],
+        2/3 : [1.67478, 1.47865, 1.78919, 2.02043],
+        3/4 : [1.73053, 1.49972, 1.78853, 1.99939],
+        1   : [1.87342, 1.52524, 1.78436, 1.97330]
+    }
+
+    dataset = []
+
+    def unit_vec(phi):
+        n_x, n_y = math.cos(phi), math.sin(phi)
+        return (n_x, n_y, 0)
+
+    for angle in angle_vec_dict:
+        unitaries = []
+        center_angle = angle * math.pi
+        angle_vec = angle_vec_dict[angle]
+
+        for i, theta in enumerate(angle_vec):
+            unitaries.append(_rotation_unitary(unit_vec(phi + (i % 2) * math.pi), theta * math.pi))
+            center_angle += (-1)**(len(angle_vec) - 1 - i) * 2 * theta * math.pi
+        
+        unitaries.append(_rotation_unitary(unit_vec(phi), center_angle))
+
+        for i, theta in reversed(list(enumerate(angle_vec))):
+            unitaries.append(_rotation_unitary(unit_vec(phi + (i % 2) * math.pi), theta * math.pi))
+
+        dataset.append(torch.stack(unitaries))
+
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    SCORE_tensors = torch.stack(dataset).to(device)
+
+    original_tensors = torch.stack([
+        _rotation_unitary(unit_vec(phi), angle * math.pi)
+        for angle in angle_vec_dict
+    ]).to(device)
+
+    return SCORE_tensors, original_tensors
 
 
 ###############################################################################
@@ -254,20 +306,20 @@ def main():
 
     # load pretrained module
 
-    model_path = "weights/single_qubit_control/_err_{_delta_std_tensor(1.),_epsilon_std_0.05}.pt"
-    model.load_state_dict(torch.load(model_path))
+    # model_path = "weights/single_qubit_control/_err_{_delta_std_tensor(1.),_epsilon_std_0.05}.pt"
+    # model.load_state_dict(torch.load(model_path))
 
     trainer_params = {
         "model" : model, "unitary_generator" : batched_unitary_generator,
         "error_sampler": get_ore_ple_error_distribution,
         "fidelity_fn": fidelity,
-        "loss_fn": negative_log_loss,
-        # "loss_fn": infidelity_loss,
+        "loss_fn": sharp_loss,
         "device": "cuda" if torch.cuda.is_available() else "cpu"
     }
 
     trainer = CompositePulseTrainer(**trainer_params)
-    train_set = build_dataset()
+    # train_set = build_dataset()
+    train_set, eval_set = build_score_emb_dataset()
 
     #####################
     ## Training #########
@@ -275,16 +327,15 @@ def main():
 
 
     # 5% PLE error
-    # error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.1, 3.05, 0.1)]
-    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(1.1, 1.5, 0.2)]
-    eval_error_param = {"delta_std": 1.0, "epsilon_std": 0.05}
+    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.65, 0.3)]
 
     trainer.train(
-        train_set, 
+        train_set,
+        eval_set,
         error_params_list=error_params_list,
-        eval_error_param=eval_error_param,
         epochs=args.num_epoch,
-        save_path=args.save_path
+        save_path=args.save_path,
+        plot=True
     )
 
 
