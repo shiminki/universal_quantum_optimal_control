@@ -92,7 +92,7 @@ def get_avg_fidelity(U_target, pulse):
 
     fidelities = {}
 
-    for delta_std in tqdm((0.1 * (i + 1) for i in range(10))):
+    for delta_std in tqdm([0.1 * (i + 1) for i in range(10)]):
         errors_mc = get_ore_ple_error_distribution(M, delta_std, 0.05)
         U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
         pulses_plot = torch.stack([pulse]).repeat_interleave(M, dim=0)
@@ -114,36 +114,47 @@ if __name__ == "__main__":
     torch.manual_seed(0)
     M = 10000
 
-    pulse_path = "weights/single_qubit_control/_err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-    # pulse_path = "weights/single_qubit_control/_err_{_delta_std_tensor(1.3000),_epsilon_std_0.05}_pulses.pt"
-    
+    SCORE_embedding = True
 
+    # pulse_path = "weights/single_qubit_control/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
+    pulse_path = "weights/single_qubit_control/err_{_delta_std_tensor(1.3000),_epsilon_std_0.05}_pulses.pt"
+    # pulse_path = "weights/single_qubit_control/err_{_delta_std_tensor(1.6000),_epsilon_std_0.05}_pulses.pt"
+    
+    # pulse_path = "weights/single_qubit_control/no_SCORE_err_{_delta_std_tensor(1.3000),_epsilon_std_0.05}_pulses.pt"
     pulses = torch.load(pulse_path) # [4, 100, 4]
     # pulses_mc = pulses.repeat_interleave(M, dim=0)
 
     print(pulses.shape)
 
-    train_set = build_dataset() # [4, 2, 2]
+    
+    if SCORE_embedding:
+        _, train_set = build_score_emb_dataset()
 
-    train_set_name = [
-        "X(pi)", "X(pi-2)", "Hadamard", "Z(pi-4)"
-    ]
+        train_set_name = [
+            fr"$R_X$({n:.2f}$\pi$)"
+            for n in (1/4, 1/3, 1/2, 2/3, 3/4, 1)
+        ]
+    else:
+        train_set = build_dataset() # [4, 2, 2]
+
+        train_set_name = [
+            "X(pi)", "X(pi-2)", "Hadamard", "Z(pi-4)"
+        ]
 
     fidelities = {}
 
-    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-    #     fidelities[target_name] = get_avg_fidelity(U_target, pulse)
+    for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+        fidelities[target_name] = get_avg_fidelity(U_target, pulse)
     
-    # df = pd.DataFrame(fidelities)
-    # df.to_csv("fidelities.csv")
-    
+    df = pd.DataFrame(fidelities)
+    df.to_csv("fidelities.csv")
 
-    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-    #     visualize(target_name, U_target, pulse, "Transformer CP", True)
-
+    for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+        visualize(target_name, U_target, pulse, "Transformer CP", True)
 
 
-    SCORE_pulses = build_SCORE_pulses()
+
+    SCORE_pulses = build_SCORE_pulses(SCORE_emb=SCORE_embedding)
 
     for target_name, U_target, pulse in zip(train_set_name, train_set, SCORE_pulses):
 
@@ -152,29 +163,3 @@ if __name__ == "__main__":
         print(pulse.shape)
         visualize(target_name, U_target, pulse, "SCORE4")
 
-
-    data = [
-        [0.7598, 1.1145, -0.8872, -0.0167, -1.5056, 0.4233, -0.0248, 2.9724, -3.0918],
-        [1.1516, 0.3675, -2.2800, 0.5743, 2.0933, 0.2061, -1.6437, -0.7061, 0.9273],
-        [0.6220, 0.6251, 1.1929, 1.6412, -0.8985, -1.5013, -0.5969, -0.6176, 1.2448],
-        [2.7879, 1.8734, -2.8629, 1.2522, 2.4905, -1.1821, -1.8967, -2.1757, 2.4733],
-        [-2.8126, -2.7701, -1.0354, -2.8256, 2.3944, -1.7776, -0.7125, 0.5963, -1.4869],
-        [-1.2035, 1.7050, 2.0577, -0.7816, 0.7853, -1.3623, 0.9122, 0.0378, 2.7522]
-    ]
-
-    for i, phis in enumerate(data):
-        
-        Deltas = [0] * len(phis)
-        Omegas = [1] * len(phis)
-        taus = [torch.pi] * len(phis)
-
-        pulse = torch.tensor([
-            Deltas, Omegas, phis, taus
-        ]).T
-
-        U_target = torch.tensor([
-            [0, 1],
-            [1, 0]
-        ], dtype=torch.cfloat)
-
-        visualize("X(pi)", U_target, pulse, f"NN_{i}")

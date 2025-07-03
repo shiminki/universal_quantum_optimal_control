@@ -77,8 +77,14 @@ def SCOREn_config(n, phi):
     return torch.tensor(config_to_tensor)
 
 
-def build_SCORE_pulses():
+def build_SCORE_pulses(SCORE_emb=False):
     SCORE_pulses = []
+
+    if SCORE_emb:
+        unitaries = {
+            angle : [(angle, 0)]
+            for angle in angle_vec_dict
+        }
 
     for target in unitaries:
         pulses = []
@@ -90,6 +96,8 @@ def build_SCORE_pulses():
         x = SCORE_pulses[-1]
         x = x.reshape(-1, x.shape[2]) 
         df = pd.DataFrame(x.to(torch.float))
+        if type(target) is float:
+            target = str(np.round(target, 2))
         df.to_csv(f"weights/single_qubit_control/{target}_SCORE_pulse.csv", index=False)
 
     return [x.reshape(-1, x.shape[-1]) for x in SCORE_pulses]
