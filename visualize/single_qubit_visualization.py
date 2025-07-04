@@ -116,17 +116,14 @@ if __name__ == "__main__":
 
     SCORE_embedding = True
 
-    # pulse_path = "weights/single_qubit_control/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-    pulse_path = "weights/single_qubit_control/err_{_delta_std_tensor(1.3000),_epsilon_std_0.05}_pulses.pt"
-    # pulse_path = "weights/single_qubit_control/err_{_delta_std_tensor(1.6000),_epsilon_std_0.05}_pulses.pt"
-    
-    # pulse_path = "weights/single_qubit_control/no_SCORE_err_{_delta_std_tensor(1.3000),_epsilon_std_0.05}_pulses.pt"
-    pulses = torch.load(pulse_path) # [4, 100, 4]
-    # pulses_mc = pulses.repeat_interleave(M, dim=0)
+    # pulse_path = "weights/single_qubit_control/SCORE Embedding/err_{_delta_std_tensor(1.3000),_epsilon_std_0.05}_pulses.pt"
+    # name = "transformer_output"
 
-    print(pulses.shape)
-
+    pulse_path = "weights/single_qubit_control/SCORE Embedding Filtered/filtered_pulses.pt"
+    name = "filtered_pulse"
     
+    pulses = torch.load(pulse_path) # [6, 100, 4]
+
     if SCORE_embedding:
         _, train_set = build_score_emb_dataset()
 
@@ -143,23 +140,18 @@ if __name__ == "__main__":
 
     fidelities = {}
 
-    for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
-        fidelities[target_name] = get_avg_fidelity(U_target, pulse)
+    # for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
+    #     fidelities[target_name] = get_avg_fidelity(U_target, pulse)
     
-    df = pd.DataFrame(fidelities)
-    df.to_csv("fidelities.csv")
+    # df = pd.DataFrame(fidelities)
+    # df.to_csv(f"{name}_fidelities.csv")
 
     for target_name, U_target, pulse in zip(train_set_name, train_set, pulses):
         visualize(target_name, U_target, pulse, "Transformer CP", True)
 
 
-
     SCORE_pulses = build_SCORE_pulses(SCORE_emb=SCORE_embedding)
 
     for target_name, U_target, pulse in zip(train_set_name, train_set, SCORE_pulses):
-
-        print(pulse)
-
-        print(pulse.shape)
         visualize(target_name, U_target, pulse, "SCORE4")
 

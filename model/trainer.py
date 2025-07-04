@@ -32,6 +32,7 @@ class CompositePulseTrainer:
         optimizer: Optional[torch.optim.Optimizer] = None,
         monte_carlo: int = 1000,
         device: str = "cuda",
+        smooth_pulses: bool = True
     ) -> None:
         print(f"Total parameter: {sum(p.numel() for p in model.parameters())}")
         self.model = model.to(device)
@@ -48,6 +49,9 @@ class CompositePulseTrainer:
         self.best_state: dict[str, torch.Tensor] | None = None
         self.best_pulses: torch.Tensor | None = None
         self.best_fidelity: float = 0.0
+
+        # Smooth pulse
+        self.smooth_pulses = smooth_pulses
 
     # ------------------------------------------------------------------
     # Training loop utilities
@@ -83,17 +87,42 @@ class CompositePulseTrainer:
 
         # print(U_out.shape, targets_mc.shape)
 
-
         loss = self.loss_fn(U_out, targets_mc, self.fidelity_fn, self.model.num_qubits)
+
+        if self.smooth_pulses:
+            loss += self.sharp_pulse_loss(pulses)
+
 
         # print(self.fidelity_fn(U_out, targets_mc, self.model.num_qubits))
 
-        
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
 
         return float(loss.detach().item())
+    
+    # ------------------------------------------------------------------
+    # Sharp Pulse Loss
+    # ------------------------------------------------------------------
+
+    def sharp_pulse_loss(self, pulses):
+        loss = 0
+        t = pulses[:, :, 3]
+
+        # Detuning and Rabi
+        for i in range(3):
+            threshold = 4 / math.pi * (self.model.param_ranges[i][1] - self.model.param_ranges[i][0])
+            x = pulses[:, :, i]
+            dx = x[:, 1:] - x[:, :-1]       # (B, L-1)
+            if i == 2:
+                dx = (dx + torch.pi) % (2 * torch.pi) - torch.pi
+            dt = t[:, :-1]                  # (B, L-1)
+            slope = torch.abs(dx / dt)                # (B, L-1)
+            squared_diff = (slope - threshold) ** 2  # (B, L-1)
+            relu_output = F.relu(squared_diff)       # (B, L-1)
+            loss += relu_output.mean()
+
+        return loss
 
     # ------------------------------------------------------------------
     # Evaluation
