@@ -111,15 +111,15 @@ class CompositePulseTrainer:
 
         # Detuning and Rabi
         for i in range(3):
-            threshold = 4 / math.pi * (self.model.param_ranges[i][1] - self.model.param_ranges[i][0])
+            threshold = 10 / math.pi * (self.model.param_ranges[i][1] - self.model.param_ranges[i][0])
             x = pulses[:, :, i]
             dx = x[:, 1:] - x[:, :-1]       # (B, L-1)
             if i == 2:
                 dx = (dx + torch.pi) % (2 * torch.pi) - torch.pi
             dt = t[:, :-1]                  # (B, L-1)
             slope = torch.abs(dx / dt)                # (B, L-1)
-            squared_diff = (slope - threshold) ** 2  # (B, L-1)
-            relu_output = F.relu(squared_diff)       # (B, L-1)
+            diff = (slope - threshold)  # (B, L-1)
+            relu_output = F.relu(diff) 
             loss += relu_output.mean()
 
         return loss
