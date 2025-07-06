@@ -84,7 +84,7 @@ def batched_unitary_generator(
     Parameters
     ----------
     pulses : torch.Tensor
-        Shape ``(B, L, 4)``, where each pulse is
+        Shape ``(B, L, 2)``, where each pulse is
         ``[Δ, Ω, φ, t]`` (detuning, Rabi amplitude, phase, duration).
     error : torch.Tensor
         Shape ``(2, B,)`` static off‑resonant detuning and pulse length error for each
@@ -97,15 +97,15 @@ def batched_unitary_generator(
         Shape ``(B, 2, 2)`` complex64/128 – the composite unitary ``U_L ⋯ U_1``.
     """
 
-    if pulses.ndim != 3 or pulses.shape[-1] != 4:
-        raise ValueError("'pulses' must have shape (B, L, 4)")
+    if pulses.ndim != 3 or pulses.shape[-1] != 2:
+        raise ValueError("'pulses' must have shape (B, L, 2)")
 
     B, L, _ = pulses.shape
     device = pulses.device
     dtype = torch.cfloat
 
     # Unpack and reshape to broadcast with Pauli matrices.
-    Delta, Omega, phi, tau = pulses.unbind(dim=-1)  # each (B, L)
+    phi, tau = pulses.unbind(dim=-1)  # each (B, L)
 
     # (4, 2, 2) on correct device
     pauli = _get_paulis(device).type(dtype)
@@ -116,13 +116,10 @@ def batched_unitary_generator(
 
     # Build base Hamiltonian H₀ for every pulse in parallel.
     H_base = (
-        Delta[..., None, None] * pauli[3]
-        + Omega[..., None, None]
-        * (
-            torch.cos(phi)[..., None, None] * pauli[1]
-            + torch.sin(phi)[..., None, None] * pauli[2]
-        )
+        torch.cos(phi)[..., None, None] * pauli[1]
+        + torch.sin(phi)[..., None, None] * pauli[2]
     )
+    
     H = H_base + delta[..., None, None, None] * pauli[3]
 
     H = 0.5 * H * (1 + epsilon[..., None, None, None])
@@ -301,7 +298,7 @@ def main():
 
 
     # Load model parameters from external JSON
-    model_params = load_model_params("train/single_qubit/model_params.json")
+    model_params = load_model_params("train/single_qubit/model_params_phase_control.json")
 
     model = CompositePulseTransformerEncoder(**model_params)
 
@@ -315,7 +312,8 @@ def main():
         "error_sampler": get_ore_ple_error_distribution,
         "fidelity_fn": fidelity,
         "loss_fn": sharp_loss,
-        "device": "cuda" if torch.cuda.is_available() else "cpu"
+        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "smooth_pulses": False
     }
 
     trainer = CompositePulseTrainer(**trainer_params)
