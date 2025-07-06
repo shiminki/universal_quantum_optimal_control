@@ -9,3 +9,5 @@ evaluate.py
 pulse_visualize.ipynb
 .vscode
 qubit_evolution
+figures
+weight
