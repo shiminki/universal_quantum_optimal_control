@@ -224,7 +224,7 @@ class CompositePulseTrainer:
                     fig_path = f"{tag}_loss_plot.png"
                     Path(fig_path).parent.mkdir(parents=True, exist_ok=True)
                     plt.savefig(fig_path)
-                    plt.show()
+                    # plt.show()
 
 
             # Reload best weights after finishing current error‑band
