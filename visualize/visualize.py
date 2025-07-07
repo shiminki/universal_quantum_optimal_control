@@ -57,14 +57,22 @@ def spinor_to_bloch(psi: torch.Tensor) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    model_name = "Transformer_Phase_Control_Only"
-    phase_control_only = True
-    pulse_dir = "weights/phase_control/err_{'delta_std':tensor(1.3000),'epsilon_std':0.05}_pulses.pt"
+    # model_name = "Transformer_Phase_Control_Only"
+    # phase_control_only = True
+    # pulse_dir = "weights/phase_control/err_{'delta_std':tensor(1.3000),'epsilon_std':0.05}_pulses.pt"
+    # save_dir = "figures/phase_control_only"
+
+
+    model_name = "Transformer_old_CP"
+    phase_control_only = False
+    pulse_dir = "Old Files/weights/single_qubit_control/SCORE Embedding/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
+    save_dir = "figures/old_CP"
+
     SCORE_embedding = True
 
 
     pulses = torch.load(pulse_dir)
-    save_dir = "figures/phase_control_only"
+    
     os.makedirs(save_dir, exist_ok=True)
 
     PSI_INIT = torch.tensor([1, 0], dtype=torch.cfloat)
@@ -168,5 +176,6 @@ if __name__ == "__main__":
             bloch_list, pulse_info_list, fidelity_list,
             deltas, epsilons,
             name=f"Ensemble Evolution of {target_name}",
-            save_path=os.path.join(video_dir, f"{target_name}.mp4")
+            save_path=os.path.join(video_dir, f"{target_name}.mp4"),
+            phase_only=phase_control_only
         )
