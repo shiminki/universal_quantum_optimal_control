@@ -8,4 +8,5 @@ evaluate.py
 .gitignore
 pulse_visualize.ipynb
 .vscode
-qubit_evolution
+Old Files
+figures/old_CP

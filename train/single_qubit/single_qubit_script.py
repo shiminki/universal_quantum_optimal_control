@@ -192,6 +192,7 @@ def custom_loss(x, tau=0.99, k=100):
     return torch.log(1 + torch.exp(-k * (x - tau))) * (1 - x)
 
 
+
 ###############################################################################
 # data
 ###############################################################################
@@ -321,6 +322,12 @@ def main():
     # train_set = build_dataset()
     # eval_set = build_dataset()
     train_set, eval_set = build_score_emb_dataset()
+
+    train_set = train_set[2:3]
+    eval_set = eval_set[2:3]
+
+    print(train_set)
+    print(eval_set)
 
     print(train_set.shape, eval_set.shape)
 
