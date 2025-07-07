@@ -57,16 +57,16 @@ def spinor_to_bloch(psi: torch.Tensor) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    # model_name = "Transformer_Phase_Control_Only"
-    # phase_control_only = True
-    # pulse_dir = "weights/phase_control/err_{'delta_std':tensor(1.3000),'epsilon_std':0.05}_pulses.pt"
-    # save_dir = "figures/phase_control_only"
+    model_name = "Transformer_Phase_Control_Only"
+    phase_control_only = True
+    pulse_dir = "weights/phase_control/err_{'delta_std':tensor(1.3000),'epsilon_std':0.05}_pulses.pt"
+    save_dir = "figures/phase_control_only"
 
 
-    model_name = "Transformer_old_CP"
-    phase_control_only = False
-    pulse_dir = "Old Files/weights/single_qubit_control/SCORE Embedding/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-    save_dir = "figures/old_CP"
+    # model_name = "Transformer_old_CP"
+    # phase_control_only = False
+    # pulse_dir = "Old Files/weights/single_qubit_control/SCORE Embedding/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
+    # save_dir = "figures/old_CP"
 
     SCORE_embedding = True
 
