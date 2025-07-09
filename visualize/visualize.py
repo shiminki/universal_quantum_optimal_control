@@ -57,16 +57,27 @@ def spinor_to_bloch(psi: torch.Tensor) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    model_name = "Transformer_Phase_Control_Only"
-    phase_control_only = True
-    pulse_dir = "weights/phase_control/err_{'delta_std':tensor(1.3000),'epsilon_std':0.05}_pulses.pt"
-    save_dir = "figures/phase_control_only"
+    # model_name = "Transformer_Phase_Control_Only"
+    # phase_control_only = True
+    # pulse_dir = "weights/phase_control/err_{'delta_std':tensor(1.3000),'epsilon_std':0.05}_pulses.pt"
+    # save_dir = "figures/phase_control_only"
 
 
     # model_name = "Transformer_old_CP"
     # phase_control_only = False
     # pulse_dir = "Old Files/weights/single_qubit_control/SCORE Embedding/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
     # save_dir = "figures/old_CP"
+
+    tau_max = "0.03"
+
+    model_name = f"Transformer_Phase_Control_{tau_max}_tau_max"
+    phase_control_only = True
+    pulse_dir = (
+        f"weights/phase_control_{tau_max}_tau_max/"
+        # "err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
+        "err_{'delta_std':tensor(1.),'epsilon_std':0.05}_pulses.pt"
+    )
+    save_dir = f"figures/phase_control_{tau_max}_tau_max"
 
     SCORE_embedding = True
 
@@ -154,18 +165,19 @@ if __name__ == "__main__":
                 # simulate
                 psi = PSI_INIT
                 bv, pi = [], []
-                tau = 0
+                # tau = 0
                 for p in df.itertuples():
                     g = generate_unitary if not phase_control_only else generate_unitary_phase_only
                     U = g(p, delta=delt, epsilon=eps)
                     psi = U @ psi
                     bv.append(spinor_to_bloch(psi))
                     if phase_control_only:
-                        tau += p[2]
-                        pi.append((0, p[1], tau))
+                        # tau += p[2]
+                        pi.append((0, p[1], p[2]))
                     else:
-                        tau += p[4]
-                        pi.append((0, p[1], p[2], p[3], tau))
+                        # tau += p[4]
+                        pi.append((0, p[1], p[2], p[3], p[4]))
+  
                 bloch_list.append(np.vstack(([spinor_to_bloch(PSI_INIT)], bv)))
                 pulse_info_list.append(pi)
                 fidelity_list.append(np.abs(torch.vdot(target_psi, psi))**2)

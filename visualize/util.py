@@ -155,11 +155,14 @@ def plot_pulse_param(file_path, title, y_labels, df):
 
     cumulative = np.concatenate(([0], np.cumsum(x / math.pi)))
     for i, ax in enumerate(axes):
-        ax.step(cumulative[1:], df.iloc[:, i], where='post')
+        if i == len(axes) - 1:
+            ax.step(cumulative[1:], df.iloc[:, i] / math.pi, where='post')
+            ax.set_xlabel("Rotation time (units of π)")
+        else:
+            ax.step(cumulative[1:], df.iloc[:, i], where='post')
         ax.set_ylabel(y_labels[i])
         ax.grid(True)
-        if i == len(axes) - 1:
-            ax.set_xlabel("Rotation time (units of π)")
+        
 
     fig.suptitle(f"Composite Pulse for {title}", fontsize=16)
 
@@ -405,7 +408,7 @@ def animate_multi_error_bloch(
     for idx in range(num_qubits):
         i_eps = idx // len(delta_list)
         j_del = idx % len(delta_list)
-        lbl = f"Δ={delta_list[j_del]}, ε={epsilon_list[i_eps]}, F={fidelity_list[idx]:.4f}"
+        lbl = fr"$\delta$={delta_list[j_del]}, ε={epsilon_list[i_eps]}, F={fidelity_list[idx]:.4f}"
         legend_handles.append(Line2D([0], [0], color=colors[idx], lw=2, label=lbl))
 
     # Create figure and axis
@@ -420,12 +423,26 @@ def animate_multi_error_bloch(
     b.vector_color = colors
     b.point_color = colors
 
-    
+    # choose which index is τ (phase_only tuples are (something, φ, τ), otherwise (…, τ) at position 4)
+    tau_idx = 2 if phase_only else 4
 
+    # build an array: step_times[k] = total τ across all qubits at frame k
+    step_times = []
+    for k in range(num_frames):
+        tot = 0.0
+        for i in range(num_qubits):
+            if k < len(pulse_info_list[i]):
+                tot += pulse_info_list[i][k][tau_idx]
+        step_times.append(tot / num_qubits)
+
+    # cumulative time (in units of π)
+    cumulative_times = np.cumsum(step_times) / np.pi
+
+    
     def update(frame):
         # Clear previous frame
         b.clear()
-        T = 0
+
         # Plot trajectories and vectors
         for i in range(num_qubits):
             traj = bloch_vectors_list[i][: frame + 1]
@@ -446,8 +463,7 @@ def animate_multi_error_bloch(
                     _, phi, tau = pulse_info_list[i][frame]
                     # ham_vec = [np.cos(phi), np.sin(phi), 0]
                 
-                T += tau
-        T /= (num_qubits * np.pi)
+        T = cumulative_times[frame]
         title_str = (
             f"{name}\n"
             fr"Total Time: {T:.4f}$\pi$"

@@ -298,14 +298,14 @@ def main():
 
 
     # Load model parameters from external JSON
-    model_params = load_model_params("train/single_qubit/model_params_phase_control.json")
+    model_params = load_model_params("train/single_qubit_phase_only/model_params.json")
 
     model = CompositePulseTransformerEncoder(**model_params)
 
     # load pretrained module
 
-    # model_path = "weights/single_qubit_control/_err_{_delta_std_tensor(1.),_epsilon_std_0.05}.pt"
-    # model.load_state_dict(torch.load(model_path))
+    model_path = "weights/phase_control_0.02_tau_max/err_{_delta_std_tensor(0.7000),_epsilon_std_0.05}.pt"
+    model.load_state_dict(torch.load(model_path))
 
     trainer_params = {
         "model" : model, "unitary_generator" : batched_unitary_generator,
@@ -320,22 +320,15 @@ def main():
     # train_set = build_dataset()
     # eval_set = build_dataset()
     train_set, eval_set = build_score_emb_dataset()
-
-    # train_set = train_set[2:3]
-    # eval_set = eval_set[2:3]
-
-    print(train_set)
-    print(eval_set)
-
-    print(train_set.shape, eval_set.shape)
-
+    
     #####################
     ## Training #########
     #####################
 
 
     # 5% PLE error
-    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.65, 0.3)]
+    # error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.65, 0.3)]
+    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(1.0, 1.65, 0.3)]
 
     trainer.train(
         train_set,
