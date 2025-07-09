@@ -68,14 +68,14 @@ if __name__ == "__main__":
     # pulse_dir = "Old Files/weights/single_qubit_control/SCORE Embedding/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
     # save_dir = "figures/old_CP"
 
-    tau_max = "0.03"
+    tau_max = "0.02"
 
     model_name = f"Transformer_Phase_Control_{tau_max}_tau_max"
     phase_control_only = True
     pulse_dir = (
         f"weights/phase_control_{tau_max}_tau_max/"
-        # "err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-        "err_{'delta_std':tensor(1.),'epsilon_std':0.05}_pulses.pt"
+        "err_{_delta_std_tensor(0.7000),_epsilon_std_0.05}_pulses.pt"
+        # "err_{'delta_std':tensor(1.),'epsilon_std':0.05}_pulses.pt"
     )
     save_dir = f"figures/phase_control_{tau_max}_tau_max"
 
