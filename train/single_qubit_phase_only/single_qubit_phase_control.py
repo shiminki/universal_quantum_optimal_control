@@ -304,8 +304,8 @@ def main():
 
     # load pretrained module
 
-    model_path = "weights/phase_control_0.02_tau_max/err_{_delta_std_tensor(0.7000),_epsilon_std_0.05}.pt"
-    model.load_state_dict(torch.load(model_path))
+    # model_path = "weights/phase_control_0.02_tau_max/err_{_delta_std_tensor(0.7000),_epsilon_std_0.05}.pt"
+    # model.load_state_dict(torch.load(model_path))
 
     trainer_params = {
         "model" : model, "unitary_generator" : batched_unitary_generator,
