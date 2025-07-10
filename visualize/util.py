@@ -247,12 +247,15 @@ def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000,
 ######################################
 
 
-def get_avg_fidelity(U_target, pulse, M=10000, phase_only=True):
+def get_avg_fidelity(U_target, pulse, M=10000, phase_only=True, delta_list=None):
 
     fidelities = {}
     g = batched_unitary_generator if not phase_only else batched_unitary_phase_control
 
-    for delta_std in tqdm([0.1 * (i + 1) for i in range(10)]):
+    if delta_list is None:
+        delta_list = [0.1 * (i + 1) for i in range(10)]
+
+    for delta_std in tqdm(delta_list):
         errors_mc = get_ore_ple_error_distribution(M, delta_std, 0.05)
         U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
         pulses_plot = torch.stack([pulse]).repeat_interleave(M, dim=0)

@@ -171,5 +171,19 @@ class CompositePulseTransformerEncoder(nn.Module):
 
         pulses = low + (high - low) * pulses_unit  # (B, L, P)
 
-        return pulses
+        # --- new code to transform φ into cumulative φ_new ---
+        phi = pulses[..., 0]
+        tau = pulses[..., 1]
 
+        angle_slope_max = 10
+
+        inc = torch.empty_like(phi)
+        inc[:, 0]   = phi[:, 0]
+        inc[:, 1:]  = phi[:, 1:] * tau[:, 1:] * angle_slope_max
+
+        phi_new = torch.cumsum(inc, dim=1)
+
+        pulses = torch.stack([phi_new, tau], dim=-1)
+
+        return pulses
+    
