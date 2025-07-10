@@ -171,7 +171,7 @@ class CompositePulseTransformerEncoder(nn.Module):
 
         pulses = low + (high - low) * pulses_unit  # (B, L, P)
 
-        base_pulse = torch.lose("combined_pulses.pt")
+        base_pulse = torch.load("combined_pulses.pt").to(pulses.device)
 
         pulses = 0.1 * pulses + base_pulse
 
