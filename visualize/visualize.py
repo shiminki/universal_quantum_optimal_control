@@ -81,8 +81,9 @@ if __name__ == "__main__":
 
     model_name = "Transformer_output_postprocessed"
     phase_control_only = True
-    pulse_dir = 'weights/cleaned_pulses/combined_pulses.pt'
-    save_dir = "figures/cleaned_pulses"
+    # pulse_dir = 'weights/cleaned_pulses/combined_pulses.pt'
+    pulse_dir = "weights/finetuned_1.0/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
+    save_dir = "figures/finetuned_pulse_1.0"
 
     SCORE_embedding = True
 
