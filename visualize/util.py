@@ -84,10 +84,27 @@ def SCOREn_config(n, phi):
             "angle": torch.tensor([angle * np.pi], dtype=torch.complex64)
         })
 
-    config_to_tensor = [
-        [0, 1, x["phi"], x["angle"]]
-        for x in config
-    ]
+    # config_to_tensor = [
+    #     [0, 1, x["phi"], x["angle"]]
+    #     for x in config
+    # ]
+    # config_to_tensor = [
+    #     [x["phi"], x["angle"]]
+    #     for x in config
+    # ]
+
+    dt = sum(x["angle"] for x in config) / 400
+
+    config_to_tensor = []
+
+    for x in config:
+        phi = x["phi"].to(torch.float)
+        angle = x["angle"].to(torch.float)
+        N = math.ceil(angle / dt)
+        for _ in range(N):
+            config_to_tensor.append(
+                [phi, angle / N]
+            )
 
     return torch.tensor(config_to_tensor)
 
@@ -100,6 +117,8 @@ def build_SCORE_pulses(SCORE_emb=False):
             angle : [(angle, 0)]
             for angle in angle_vec_dict
         }
+    save_dir = "weights/SCORE_Pulse/"
+    os.makedirs(save_dir, exist_ok=True)
 
     for target in unitaries:
         pulses = []
@@ -113,9 +132,15 @@ def build_SCORE_pulses(SCORE_emb=False):
         df = pd.DataFrame(x.to(torch.float))
         if type(target) is float:
             target = str(np.round(target, 2))
-        df.to_csv(f"weights/single_qubit_control/{target}_SCORE_pulse.csv", index=False)
+        df.to_csv(os.path.join(save_dir, f"{target}_SCORE_pulse.csv"), index=False)
 
-    return [x.reshape(-1, x.shape[-1]) for x in SCORE_pulses]
+    SCORE_pulses = [x.reshape(-1, x.shape[-1]) for x in SCORE_pulses]
+
+    
+
+    torch.save(SCORE_pulses, os.path.join(save_dir, "SCORE_pulse.pt"))
+
+    return SCORE_pulses
 
 
 #############################
