@@ -68,16 +68,28 @@ if __name__ == "__main__":
     # pulse_dir = "Old Files/weights/single_qubit_control/SCORE Embedding/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
     # save_dir = "figures/old_CP"
 
-    tau_max = "0.02"
+    # tau_max = "0.07"
 
-    model_name = f"Transformer_Phase_Control_{tau_max}_tau_max"
+    # model_name = f"Transformer_Phase_Control_{tau_max}_tau_max"
+    # phase_control_only = True
+    # pulse_dir = (
+    #     f"weights/phase_control_{tau_max}_tau_max/"
+    #     "err_{_delta_std_tensor(0.7000),_epsilon_std_0.05}_pulses.pt"
+    #     # "err_{'delta_std':tensor(1.),'epsilon_std':0.05}_pulses.pt"
+    # )
+    # save_dir = f"figures/phase_control_{tau_max}_tau_max"
+
+    # model_name = "Transformer_output_postprocessed"
+    # phase_control_only = True
+    # pulse_dir = "weights/fine_tuned_pulse/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
+    # save_dir = "figures/finetuned_pulse"
+
+    # SCORE_embedding = True
+
+    model_name = "SCORE4 Pulse"
     phase_control_only = True
-    pulse_dir = (
-        f"weights/phase_control_{tau_max}_tau_max/"
-        "err_{_delta_std_tensor(0.7000),_epsilon_std_0.05}_pulses.pt"
-        # "err_{'delta_std':tensor(1.),'epsilon_std':0.05}_pulses.pt"
-    )
-    save_dir = f"figures/phase_control_{tau_max}_tau_max"
+    pulse_dir = "weights/SCORE_Pulse/SCORE_pulse.pt"
+    save_dir = "figures/SCORE4"
 
     SCORE_embedding = True
 

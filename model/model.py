@@ -89,7 +89,8 @@ class CompositePulseTransformerEncoder(nn.Module):
         d_model: int = 256,
         n_layers: int = 12,
         n_heads: int = 4,
-        dropout: float = 0.1
+        dropout: float = 0.1,
+        finetune=False
     ) -> None:
         
         super().__init__()
@@ -127,6 +128,8 @@ class CompositePulseTransformerEncoder(nn.Module):
         # Output linear head – maps encoder hidden → pulse parameters (normalised)
         self.head = nn.Linear(d_model, self.max_pulses * self.param_dim)
 
+        # Whether to fine-tune from a base pulse
+        self.finetune = finetune
 
 
     # ------------------------------------------------------------------
@@ -171,5 +174,12 @@ class CompositePulseTransformerEncoder(nn.Module):
 
         pulses = low + (high - low) * pulses_unit  # (B, L, P)
 
-        return pulses
+        if self.finetune:
+            base_pulse = torch.load("combined_pulses.pt").to(pulses.device)
+            pulses = 0.2 * pulses + base_pulse
+            
+        pulses[:, :, -1] = F.relu(pulses[:, :, -1])
 
+        return pulses
+    
+ 
