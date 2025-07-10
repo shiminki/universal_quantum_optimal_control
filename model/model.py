@@ -182,3 +182,4 @@ class CompositePulseTransformerEncoder(nn.Module):
 
         return pulses
     
+ 
