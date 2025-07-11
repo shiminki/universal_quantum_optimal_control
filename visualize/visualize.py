@@ -5,8 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from util import *
 
-from train.single_qubit.single_qubit_script import *
-from train.single_qubit_phase_only.single_qubit_phase_control import batched_unitary_generator as batched_unitary_phase_control
+from train.single_qubit.single_qubit_script import batched_unitary_generator
 
 
 #######################################################
@@ -22,17 +21,6 @@ pauli = [_I2_CPU, _SIGMA_X_CPU, _SIGMA_Y_CPU, _SIGMA_Z_CPU]
 
 
 def generate_unitary(pulse, delta, epsilon):
-    Delta = pulse[1]
-    Omega = pulse[2]
-    phi = pulse[3]
-    tau = pulse[4] / 2
-    H_base = (Delta * pauli[3] +
-                Omega * (np.cos(phi) * pauli[1] + np.sin(phi) * pauli[2]))
-    H = (H_base + delta * pauli[3])
-    return torch.linalg.matrix_exp(-1j * H * tau * (1 + epsilon))
-
-
-def generate_unitary_phase_only(pulse, delta, epsilon):
     phi = pulse[1]
     tau = pulse[2] / 2
     H_base = (np.cos(phi) * pauli[1] + np.sin(phi) * pauli[2])
@@ -179,7 +167,7 @@ if __name__ == "__main__":
                 bv, pi = [], []
                 # tau = 0
                 for p in df.itertuples():
-                    g = generate_unitary if not phase_control_only else generate_unitary_phase_only
+                    g = generate_unitary
                     U = g(p, delta=delt, epsilon=eps)
                     psi = U @ psi
                     bv.append(spinor_to_bloch(psi))

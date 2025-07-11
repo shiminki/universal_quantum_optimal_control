@@ -32,7 +32,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 
 from train.single_qubit.single_qubit_script import *
-from train.single_qubit_phase_only.single_qubit_phase_control import batched_unitary_generator as batched_unitary_phase_control
 
 
 
@@ -212,7 +211,7 @@ def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000,
     U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
     pulses_plot = torch.stack([pulse]).repeat_interleave(M, dim=0)
 
-    g = batched_unitary_generator if not phase_only else batched_unitary_phase_control
+    g = batched_unitary_generator
 
     U_out_plot = g(pulses_plot, errors_mc)
     F = fidelity(U_out_plot, U_target_plot, 1)
@@ -275,7 +274,7 @@ def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000,
 def get_avg_fidelity(U_target, pulse, M=10000, phase_only=True, delta_list=None):
 
     fidelities = {}
-    g = batched_unitary_generator if not phase_only else batched_unitary_phase_control
+    g = batched_unitary_generator
 
     if delta_list is None:
         delta_list = [0.1 * (i + 1) for i in range(10)]
@@ -303,7 +302,7 @@ def plot_fidelity_by_std(target_name, U_target, pulse, name, save_dir, M=10000, 
     total_time = sum(pulse[:, -1].to(dtype=torch.float64)) / np.pi
 
     fidelities = {}
-    g = batched_unitary_generator if not phase_only else batched_unitary_phase_control
+    g = batched_unitary_generator
 
     delta_vals = torch.arange(0.01, 2.0, 0.01)
 
