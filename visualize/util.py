@@ -22,6 +22,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
 from matplotlib.colors import TABLEAU_COLORS, to_rgba
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm, colors as mcolors
 
 from qutip import Bloch
 
@@ -427,21 +428,24 @@ def animate_multi_error_bloch(
     phase_only=True
 ):
     num_qubits = len(bloch_vectors_list)
+
     num_frames = bloch_vectors_list[0].shape[0]
 
     # Prepare colors and legend handles
-    colors = list(TABLEAU_COLORS.values())[:num_qubits]
-    legend_handles = []
-    for idx in range(num_qubits):
-        i_eps = idx // len(delta_list)
-        j_del = idx % len(delta_list)
-        lbl = fr"$\delta$={delta_list[j_del]}, ε={epsilon_list[i_eps]}, F={fidelity_list[idx]:.4f}"
-        legend_handles.append(Line2D([0], [0], color=colors[idx], lw=2, label=lbl))
-
+    # colors = list(TABLEAU_COLORS.values())
+    norm  = mcolors.Normalize(vmin=min(delta_list), vmax=max(delta_list))
+    cmap  = cm.get_cmap('viridis')   # or any other built-in colormap
+    colors = [cmap(norm(d)) for d in delta_list]
+    
     # Create figure and axis
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection='3d')
     fig.suptitle(name, fontsize=14)
+
+    sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array(delta_list)   # any sequence of length ≥1 works
+    cbar = fig.colorbar(sm, ax=ax, shrink=0.7, pad=0.1)
+    cbar.set_label(r'Detuning $\delta$')
 
     # Initialize Bloch object with our axes
     b = Bloch(fig=fig, axes=ax)
@@ -465,7 +469,6 @@ def animate_multi_error_bloch(
     # cumulative time (in units of π)
     cumulative_times = np.cumsum(step_times) / np.pi
 
-    
     def update(frame):
         # Clear previous frame
         b.clear()
@@ -475,11 +478,15 @@ def animate_multi_error_bloch(
             traj = bloch_vectors_list[i][: frame + 1]
             xs, ys, zs = traj[:, 0].tolist(), traj[:, 1].tolist(), traj[:, 2].tolist()
             # trajectory line
-            b.add_points([xs, ys, zs], meth='l', colors=[to_rgba(colors[i]) for _ in range(3)], alpha=0.5)
+            # b.add_points([xs, ys, zs], meth='l', colors=[to_rgba(colors[i % len(colors)]) for _ in range(3)], alpha=0.5)
+            b.add_points([xs, ys, zs],
+                         meth='l',
+                         colors=[colors[i]]*len(xs),
+                         alpha=0.5)
             # head of trajectory
-            vec = bloch_vectors_list[i][frame].tolist()
+            vec = bloch_vectors_list[i][frame]
+            b.add_vectors([vec], colors=[colors[i]])
 
-            b.add_vectors([vec], colors=colors[i])
             # Hamiltonian arrow
             if pulse_info_list and frame < len(pulse_info_list[i]):
                 if not phase_only:
@@ -491,21 +498,24 @@ def animate_multi_error_bloch(
                     # ham_vec = [np.cos(phi), np.sin(phi), 0]
                 
         T = cumulative_times[frame]
+        F_mean = np.mean(fidelity_list)
+        F_err = np.std(fidelity_list) / np.sqrt(len(fidelity_list))
         title_str = (
             f"{name}\n"
             fr"Total Time: {T:.4f}$\pi$"
+            f"\nExpected Fidelity: {F_mean:.4f} +/- {F_err:.4f}"
         )
         fig.suptitle(title_str, fontsize=14)
         # Draw sphere and elements
         b.make_sphere()
         b.render()
         # Add legend
-        ax.legend(handles=legend_handles, loc='upper right', bbox_to_anchor=(1.05, 1.0), fontsize=8)
+        # ax.legend(handles=legend_handles, loc='upper right', bbox_to_anchor=(1.05, 1.0), fontsize=8)
 
     # Create animation
     ani = FuncAnimation(fig, update, frames=num_frames, interval=50)
     # Save and close
-    ani.save(save_path, fps=30, dpi=150)
+    ani.save(save_path, fps=120, dpi=150)
     plt.close(fig)
 
 
