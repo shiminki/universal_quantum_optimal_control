@@ -86,12 +86,6 @@ class CompositePulseTrainer:
 
         loss = self.loss_fn(U_out, targets_mc, self.fidelity_fn, self.model.num_qubits)
 
-        if self.smooth_pulses:
-            loss += self.sharp_pulse_loss(pulses)
-
-
-        # print(self.fidelity_fn(U_out, targets_mc, self.model.num_qubits))
-
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
