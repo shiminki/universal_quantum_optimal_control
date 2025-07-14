@@ -21,7 +21,7 @@ input_files = [
 ]
 
 # Processing parameters
-slope_threshold = 1 # rad/unit
+slope_threshold = 0.7 # rad/unit
 
 # Process each file
 for infile in input_files:
