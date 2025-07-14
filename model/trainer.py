@@ -32,7 +32,6 @@ class CompositePulseTrainer:
         optimizer: Optional[torch.optim.Optimizer] = None,
         monte_carlo: int = 1000,
         device: str = "cuda",
-        batch_split: int=1
     ) -> None:
         print(f"Total parameter: {sum(p.numel() for p in model.parameters())}")
         self.model = model.to(device)
@@ -50,8 +49,6 @@ class CompositePulseTrainer:
         self.best_pulses: torch.Tensor | None = None
         self.best_fidelity: float = 0.0
 
-        # batch split for training
-        self.batch_split = batch_split
 
     # ------------------------------------------------------------------
     # Training loop utilities
@@ -69,30 +66,28 @@ class CompositePulseTrainer:
         self.model.train()
         # Back‑prop
         self.optimizer.zero_grad()
-        loss = 0
 
-        U_emb_chunk = torch.chunk(U_emb_batch, self.batch_split, dim=0)
-        U_target_chunk = torch.chunk(U_target_batch, self.batch_split, dim=0)
+        U_emb = U_emb_batch.to(self.device)
+        U_target = U_target_batch.to(self.device)
 
-        for b in range(self.batch_split):
-            U_emb_epoch = U_emb_chunk[b].to(self.device)
-            U_target_epoch = U_target_chunk[b].to(self.device)
+        # Forward pass once to obtain pulse parameters
+        pulses = self.model(U_emb)  # (B, L, P)
 
-            # Forward pass once to obtain pulse parameters
-            pulses = self.model(U_emb_epoch)  # (B, L, P)
+        # ──────────────────────────────────────────────────────────────
+        # Vectorised Monte‑Carlo sampling
+        # ──────────────────────────────────────────────────────────────
+        pulses_mc = pulses.repeat_interleave(self.monte_carlo, dim=0)   # (Bm, L, P)
+        targets_mc = U_target.repeat_interleave(self.monte_carlo, dim=0)  # (Bm, d, d)
+        error = error_distribution(self.monte_carlo * U_target.shape[0]).to(self.device)                   # (Bm, …)
 
-            # ──────────────────────────────────────────────────────────────
-            # Vectorised Monte‑Carlo sampling
-            # ──────────────────────────────────────────────────────────────
-            pulses_mc = pulses.repeat_interleave(self.monte_carlo, dim=0)   # (Bm, L, P)
-            targets_mc = U_target_epoch.repeat_interleave(self.monte_carlo, dim=0)  # (Bm, d, d)
-            error = error_distribution(self.monte_carlo * U_emb_epoch.shape[0]).to(self.device)                   # (Bm, …)
+        U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)
 
-            U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)
+        # print(U_out.shape, targets_mc.shape)
 
-            # print(U_out.shape, targets_mc.shape)
+        loss = self.loss_fn(U_out, targets_mc, self.fidelity_fn, self.model.num_qubits)
 
-            loss += self.loss_fn(U_out, targets_mc, self.fidelity_fn, self.model.num_qubits)
+        if self.smooth_pulses:
+            loss += self.sharp_pulse_loss(pulses)
 
 
         # print(self.fidelity_fn(U_out, targets_mc, self.model.num_qubits))
@@ -103,7 +98,7 @@ class CompositePulseTrainer:
 
         return float(loss.detach().item())
     
-
+   
     # ------------------------------------------------------------------
     # Evaluation
     # ------------------------------------------------------------------
@@ -113,29 +108,21 @@ class CompositePulseTrainer:
         """Compute mean fidelity on *U_target_batch* (no grad)."""
         self.model.eval()
 
-        mean_fid = 0
-
-        U_emb_chunk = torch.chunk(U_emb_batch, self.batch_split, dim=0)
-        U_target_chunk = torch.chunk(U_target_batch, self.batch_split, dim=0)
-
-        for b in range(self.batch_split):
-            U_emb_epoch = U_emb_chunk[b].to(self.device)
-            U_target_epoch = U_target_chunk[b].to(self.device)
-
-            # Forward pass once to obtain pulse parameters
-            pulses = self.model(U_emb_epoch)  # (B, L, P)
-
-            # ──────────────────────────────────────────────────────────────
-            # Vectorised Monte‑Carlo sampling
-            # ──────────────────────────────────────────────────────────────
-            pulses_mc = pulses.repeat_interleave(self.monte_carlo, dim=0)   # (Bm, L, P)
-            targets_mc = U_target_epoch.repeat_interleave(self.monte_carlo, dim=0)  # (Bm, d, d)
-            error = error_distribution(self.monte_carlo * U_emb_epoch.shape[0]).to(self.device)                   # (Bm, …)
-
-            U_out = self.unitary_generator(pulses_mc, error)  
-
-            mean_fid += self.fidelity_fn(U_out, targets_mc, self.model.num_qubits).mean().item()
+        U_emb = U_emb_batch.to(self.device)
+        U_target = U_target_batch.to(self.device)
+        pulses = self.model(U_emb)
         
+        # ──────────────────────────────────────────────────────────────
+        # Vectorised Monte‑Carlo sampling
+        # ──────────────────────────────────────────────────────────────
+        pulses_mc = pulses.repeat_interleave(self.monte_carlo, dim=0)   # (Bm, L, P)
+        targets_mc = U_target.repeat_interleave(self.monte_carlo, dim=0)  # (Bm, d, d)
+        error = error_distribution(self.monte_carlo * U_target.shape[0]).to(self.device)                   # (Bm, …)
+
+        U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)
+
+
+        mean_fid = self.fidelity_fn(U_out, targets_mc, self.model.num_qubits).mean().item()
         return mean_fid
 
     # ------------------------------------------------------------------
