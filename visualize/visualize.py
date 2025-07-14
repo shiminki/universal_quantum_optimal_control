@@ -58,11 +58,11 @@ if __name__ == "__main__":
 
     # tau_max = "0.07"
 
-    model_name = f"Transformer_Phase_Control_1600_pulse_cleaned"
+    model_name = f"Transformer_Phase_Control_1600_pulse_finetuned"
     phase_control_only = True
     # pulse_dir = "weights/length_1600/1600_pulse_length_pretrain_tau_max_0.2/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-    pulse_dir = "weights/cleaned_pulse_1600_0.2_tau_max/combined_pulses.pt"
-    save_dir = f"figures/phase_control_1600_pulse_cleaned"
+    pulse_dir = "weights/length_1600/1600_pulse_length_pretrain_tau_max_0.2_finetune/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
+    save_dir = f"figures/phase_control_1600_pulse_finetuned"
 
     # model_name = "Transformer_output_postprocessed"
     # phase_control_only = True
