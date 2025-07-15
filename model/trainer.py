@@ -32,7 +32,6 @@ class CompositePulseTrainer:
         optimizer: Optional[torch.optim.Optimizer] = None,
         monte_carlo: int = 1000,
         device: str = "cuda",
-        smooth_pulses: bool = True
     ) -> None:
         print(f"Total parameter: {sum(p.numel() for p in model.parameters())}")
         self.model = model.to(device)
@@ -50,14 +49,12 @@ class CompositePulseTrainer:
         self.best_pulses: torch.Tensor | None = None
         self.best_fidelity: float = 0.0
 
-        # Smooth pulse
-        self.smooth_pulses = smooth_pulses
 
     # ------------------------------------------------------------------
     # Training loop utilities
     # ------------------------------------------------------------------
 
-    def train_epoch(self, U_emb: torch.Tensor, U_target: torch.Tensor, error_distribution) -> float:
+    def train_epoch(self, U_emb_batch: torch.Tensor, U_target_batch: torch.Tensor, error_distribution) -> float:
         """One optimisation step (epoch).
 
         U_emb is the SCORE expansion of U_target
@@ -70,8 +67,8 @@ class CompositePulseTrainer:
         # Back‑prop
         self.optimizer.zero_grad()
 
-        U_emb = U_emb.to(self.device)
-        U_target = U_target.to(self.device)
+        U_emb = U_emb_batch.to(self.device)
+        U_target = U_target_batch.to(self.device)
 
         # Forward pass once to obtain pulse parameters
         pulses = self.model(U_emb)  # (B, L, P)
@@ -89,41 +86,13 @@ class CompositePulseTrainer:
 
         loss = self.loss_fn(U_out, targets_mc, self.fidelity_fn, self.model.num_qubits)
 
-        if self.smooth_pulses:
-            loss += self.sharp_pulse_loss(pulses)
-
-
-        # print(self.fidelity_fn(U_out, targets_mc, self.model.num_qubits))
-
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
 
         return float(loss.detach().item())
     
-    # ------------------------------------------------------------------
-    # Sharp Pulse Loss
-    # ------------------------------------------------------------------
-
-    def sharp_pulse_loss(self, pulses):
-        loss = 0
-        t = pulses[:, :, 3]
-
-        # Detuning and Rabi
-        for i in range(3):
-            threshold = 10 / math.pi * (self.model.param_ranges[i][1] - self.model.param_ranges[i][0])
-            x = pulses[:, :, i]
-            dx = x[:, 1:] - x[:, :-1]       # (B, L-1)
-            if i == 2:
-                dx = (dx + torch.pi) % (2 * torch.pi) - torch.pi
-            dt = t[:, :-1]                  # (B, L-1)
-            slope = torch.abs(dx / dt)                # (B, L-1)
-            diff = (slope - threshold)  # (B, L-1)
-            relu_output = F.relu(diff) 
-            loss += relu_output.mean()
-
-        return loss
-
+   
     # ------------------------------------------------------------------
     # Evaluation
     # ------------------------------------------------------------------

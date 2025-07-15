@@ -58,28 +58,25 @@ if __name__ == "__main__":
 
     # tau_max = "0.07"
 
-    # model_name = f"Transformer_Phase_Control_{tau_max}_tau_max"
-    # phase_control_only = True
-    # pulse_dir = (
-    #     f"weights/phase_control_{tau_max}_tau_max/"
-    #     "err_{_delta_std_tensor(0.7000),_epsilon_std_0.05}_pulses.pt"
-    #     # "err_{'delta_std':tensor(1.),'epsilon_std':0.05}_pulses.pt"
-    # )
-    # save_dir = f"figures/phase_control_{tau_max}_tau_max"
+    model_name = f"Transformer_Phase_Control_1600_pulse_finetuned_iter2"
+    phase_control_only = True
+    # pulse_dir = "weights/length_1600/1600_pulse_length_pretrain_tau_max_0.2/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
+    pulse_dir = "weights/1600_pulse_length_pretrain_tau_max_0.2_finetune_iter2/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
+    save_dir = f"figures/phase_control_1600_pulse_finetuned_iter2"
 
     # model_name = "Transformer_output_postprocessed"
     # phase_control_only = True
     # pulse_dir = "weights/fine_tuned_pulse/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-    # save_dir = "figures/finetuned_pulse"
-
-    # SCORE_embedding = True
-
-    model_name = "SCORE4 Pulse"
-    phase_control_only = True
-    pulse_dir = "weights/SCORE_Pulse/SCORE_pulse.pt"
-    save_dir = "figures/SCORE4"
+    # save_dir = "figures/finetuned_pulse_uniform_dist"
 
     SCORE_embedding = True
+
+    # model_name = "SCORE4 Pulse"
+    # phase_control_only = True
+    # pulse_dir = "weights/SCORE_Pulse/SCORE_pulse.pt"
+    # save_dir = "figures/SCORE4"
+
+    # SCORE_embedding = True
 
 
     pulses = torch.load(pulse_dir)
@@ -87,12 +84,6 @@ if __name__ == "__main__":
     os.makedirs(save_dir, exist_ok=True)
 
     PSI_INIT = torch.tensor([1, 0], dtype=torch.cfloat)
-
-    # y_labels = [
-    #     "Detuning / max Rabi",
-    #     "Rabi Frequency",
-    #     "Phase (units of pi)"
-    # ]
 
     y_labels = [
         "Phase (units of pi)"
@@ -153,35 +144,44 @@ if __name__ == "__main__":
 
         # Generate qubit evolution video
         print("Generating qubit evolution video")
-        deltas = [-2, -1, -0.5, 0, 0.5, 1, 2]
-        epsilons = [0]
+        # deltas = [-2, -1, -0.5, 0, 0.5, 1, 2]
+        # epsilons = [0]
+        M = 30
+        errors = get_ore_ple_error_distribution(batch_size=M)
+        deltas, epsilons = errors[0], errors[1]
+        # # uniform dist
+        # deltas = np.random.random(M) * 2 - 1
+
         bloch_list, pulse_info_list, fidelity_list = [], [], []
 
         # target state
         target_psi = U_target @ PSI_INIT
 
-        for eps in epsilons:
-            for delt in deltas:
-                # simulate
-                psi = PSI_INIT
-                bv, pi = [], []
-                # tau = 0
-                for p in df.itertuples():
-                    g = generate_unitary
-                    U = g(p, delta=delt, epsilon=eps)
-                    psi = U @ psi
-                    bv.append(spinor_to_bloch(psi))
-                    if phase_control_only:
-                        # tau += p[2]
-                        pi.append((0, p[1], p[2]))
-                    else:
-                        # tau += p[4]
-                        pi.append((0, p[1], p[2], p[3], p[4]))
-  
-                bloch_list.append(np.vstack(([spinor_to_bloch(PSI_INIT)], bv)))
-                pulse_info_list.append(pi)
-                fidelity_list.append(np.abs(torch.vdot(target_psi, psi))**2)
+        # for eps in epsilons:
+        #     for delt in deltas:
+        for eps, delt in zip(epsilons, deltas):
+            # simulate
+            psi = PSI_INIT
+            bv, pi = [], []
+            # tau = 0
+            for p in df.itertuples():
+                g = generate_unitary
+                U = g(p, delta=delt, epsilon=eps)
+                psi = U @ psi
+                bv.append(spinor_to_bloch(psi))
+                if phase_control_only:
+                    # tau += p[2]
+                    pi.append((0, p[1], p[2]))
+                else:
+                    # tau += p[4]
+                    pi.append((0, p[1], p[2], p[3], p[4]))
+
+            bloch_list.append(np.vstack(([spinor_to_bloch(PSI_INIT)], bv)))
+            pulse_info_list.append(pi)
+            fidelity_list.append(np.abs(torch.vdot(target_psi, psi))**2)
         
+
+
         video_dir = os.path.join(save_dir, "qubit_evolutions")
         os.makedirs(video_dir, exist_ok=True)
         animate_multi_error_bloch(

@@ -313,7 +313,6 @@ def main():
         "fidelity_fn": fidelity,
         "loss_fn": sharp_loss,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "smooth_pulses": False
     }
 
     trainer = CompositePulseTrainer(**trainer_params)
