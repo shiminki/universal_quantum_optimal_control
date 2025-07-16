@@ -147,6 +147,17 @@ class CompositePulseTrainer:
         self.device = str(self.device)
         self.model.to(self.device)
 
+        #########################
+        # Universal gate version
+        #########################
+
+        L = train_set.shape[0]
+
+        train_set_batch = train_set.view(10, L//10, 3, 2, 2)
+        eval_set_batch = eval_set.view(10, L//10, 2, 2)
+
+        #########################
+
         for error_params in error_params_list:
             self.best_fidelity = 0.0
             error_distribution = self.get_error_distribution(error_params=error_params)
@@ -159,9 +170,17 @@ class CompositePulseTrainer:
 
             with tqdm(total=epochs, desc=f"ϵ = {error_params}", dynamic_ncols=True) as pbar:
                 for epoch in range(1, epochs + 1):
-                    train_loss = self.train_epoch(train_set, eval_set, error_distribution)
-                    
-                    eval_fid = self.evaluate(train_set, eval_set, eval_dist)
+                    train_loss_list = []
+                    eval_fid_list = []
+
+                    for train_set, eval_set in tqdm(list(zip(train_set_batch, eval_set_batch))):
+                        train_loss = self.train_epoch(train_set, eval_set, error_distribution) 
+                        eval_fid = self.evaluate(train_set, eval_set, eval_dist)
+                        train_loss_list.append(train_loss)
+                        eval_fid_list.append(eval_fid)
+
+                    train_loss = torch.mean(train_loss_list).item()
+                    eval_fid = torch.mean(eval_fid_list).item()
 
                     # Track best model
                     if eval_fid > self.best_fidelity:
