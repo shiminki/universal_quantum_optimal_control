@@ -176,6 +176,7 @@ class CompositePulseTransformerEncoder(nn.Module):
 
         if self.finetune:
             base_pulse = torch.load("combined_pulses.pt").to(pulses.device)
+            base_pulse = base_pulse.unsqueeze(0).expand(B, -1, -1)
             pulses = 0.2 * pulses + base_pulse
             
         pulses[:, :, -1] = F.relu(pulses[:, :, -1])

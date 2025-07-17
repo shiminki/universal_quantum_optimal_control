@@ -173,14 +173,21 @@ class CompositePulseTrainer:
                     train_loss_list = []
                     eval_fid_list = []
 
-                    for train_set, eval_set in tqdm(list(zip(train_set_batch, eval_set_batch))):
+                    for train_set, eval_set in tqdm(
+                        zip(train_set_batch, eval_set_batch),
+                        total=len(train_set_batch),
+                    ):
                         train_loss = self.train_epoch(train_set, eval_set, error_distribution) 
                         eval_fid = self.evaluate(train_set, eval_set, eval_dist)
                         train_loss_list.append(train_loss)
                         eval_fid_list.append(eval_fid)
 
+                        
+                    train_loss_list = torch.stack(train_loss_list)
+                    eval_fid_list = torch.stack(eval_fid_list)
                     train_loss = torch.mean(train_loss_list).item()
                     eval_fid = torch.mean(eval_fid_list).item()
+
 
                     # Track best model
                     if eval_fid > self.best_fidelity:
