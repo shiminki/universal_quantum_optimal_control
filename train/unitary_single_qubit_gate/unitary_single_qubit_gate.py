@@ -229,7 +229,7 @@ def get_score_emb_unitary(phi, angle) -> List[torch.Tensor]:
 def build_score_emb_dataset(phi=0, M=100) -> List[torch.Tensor]:
     dataset = []
     dtheta = 1/M
-    angles = torch.arange(0, 1 + dtheta, dtheta) * math.pi
+    angles = torch.arange(dtheta, 1 + dtheta, dtheta) * math.pi
 
     for angle in angles:
         unitaries = []
