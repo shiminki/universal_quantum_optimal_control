@@ -154,12 +154,13 @@ class CompositePulseTrainer:
         # Universal gate version
         #########################
 
-        L = train_emb_set.shape[0]
+        L_train = train_emb_set.shape[0]
+        L_eval = eval_emb_set.shape[0]
 
-        train_emb_batch = train_emb_set.view(10, L//10, 3, 2, 2)
-        train_target_batch = train_target_set.view(10, L//10, 2, 2)
-        eval_emb_batch = eval_emb_set.view(10, L//10, 3, 2, 2)
-        eval_target_batch = eval_target_set.view(10, L//10, 2, 2)
+        train_emb_batch = train_emb_set.view(10, L_train//10, 3, 2, 2)
+        train_target_batch = train_target_set.view(10, L_train//10, 2, 2)
+        eval_emb_batch = eval_emb_set.view(10, L_eval//10, 3, 2, 2)
+        eval_target_batch = eval_target_set.view(10, L_eval//10, 2, 2)
 
         #########################
 
