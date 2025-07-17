@@ -223,14 +223,14 @@ def build_dataset() -> List[torch.Tensor]:
     ]).to(device)
 
 
-def build_score_emb_dataset(phi=0) -> List[torch.Tensor]:
+def build_score_emb_dataset(phi=0, M=100) -> List[torch.Tensor]:
     dataset = []
 
     def unit_vec(phi):
         n_x, n_y = math.cos(phi), math.sin(phi)
         return (n_x, n_y, 0)
     
-    angles = torch.rand(100) * math.pi
+    angles = torch.rand(M) * math.pi
 
     for angle in angles:
         unitaries = []
@@ -303,11 +303,10 @@ def main():
     }
 
     trainer = CompositePulseTrainer(**trainer_params)
-    # train_set = build_dataset()
-    # eval_set = build_dataset()
-    train_set, eval_set = build_score_emb_dataset()
 
-    print(train_set.shape, eval_set.shape)
+    train_emb_set, train_target_set = build_score_emb_dataset(M=300)
+    eval_emb_set, eval_target_set = build_score_emb_dataset(M=100)
+
     
     #####################
     ## Training #########
@@ -318,8 +317,10 @@ def main():
     error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.65, 0.3)]
     
     trainer.train(
-        train_set,
-        eval_set,
+        train_emb_set,
+        train_target_set,
+        eval_emb_set,
+        eval_target_set,
         error_params_list=error_params_list,
         epochs=args.num_epoch,
         save_path=args.save_path,
