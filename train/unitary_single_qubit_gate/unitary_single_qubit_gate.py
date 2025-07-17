@@ -226,10 +226,13 @@ def get_score_emb_unitary(phi, angle) -> List[torch.Tensor]:
     return SCORE_tensor, target_unitary
 
 
-def build_score_emb_dataset(phi=0, M=100) -> List[torch.Tensor]:
+def build_score_emb_dataset(phi=0, M=100, random=False) -> List[torch.Tensor]:
     dataset = []
-    dtheta = 1/M
-    angles = torch.arange(dtheta, 1 + dtheta, dtheta) * math.pi
+    if random:
+        angles = torch.randn(M) * math.pi
+    else:
+        dtheta = 1/M
+        angles = torch.arange(dtheta, 1 + dtheta, dtheta) * math.pi
 
     for angle in angles:
         unitaries = []
@@ -302,8 +305,8 @@ def main():
 
     trainer = CompositePulseTrainer(**trainer_params)
 
-    train_emb_set, train_target_set = build_score_emb_dataset(M=300)
-    eval_emb_set, eval_target_set = build_score_emb_dataset(M=300)
+    train_emb_set, train_target_set = build_score_emb_dataset(M=3000)
+    eval_emb_set, eval_target_set = build_score_emb_dataset(M=3000, random=True)
 
     
     #####################
@@ -322,7 +325,8 @@ def main():
         error_params_list=error_params_list,
         epochs=args.num_epoch,
         save_path=args.save_path,
-        plot=True
+        plot=True,
+        batch_size=200
     )
 
 

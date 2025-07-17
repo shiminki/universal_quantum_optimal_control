@@ -19,9 +19,24 @@ st.set_page_config(page_title="Composite Pulse for Universal Gates", layout="cen
 # Title of the app
 st.title("Composite Pulse for Universal Gates")
 
+# Model selection dropdown
+model_option = st.selectbox(
+    "Select model length:",
+    options=["100 length", "400 length"]
+)
+# Map selection to model_name and model_path
+if model_option == "100 length":
+    model_name = "composite_pulse_len100"
+    model_path = "demo/weight/length_100.pt"
+    model_params = load_model_params("demo/params/length_100.json")
+else:
+    model_name = "composite_pulse_len400"
+    model_path = "demo/weight/length_400.pt"
+    model_params = load_model_params("demo/params/length_400.json")
+
 # User inputs for the two parameters
-phi_raw = st.number_input("Phi (units of pi from -1 to 1)", value=0.0, format="%.2f")
-theta_raw = st.number_input("Theta (units of pi from 0 to 1)", value=0.0, format="%.2f")
+phi_raw = st.number_input("Phi (units of pi from -1 to 1)", value=0.0, format="%.3f")
+theta_raw = st.number_input("Theta (units of pi from 0 to 1)", value=0.0, format="%.3f")
 
 st.write("---")
 st.write("### Inputs")
@@ -63,21 +78,17 @@ def spinor_to_bloch(psi: torch.Tensor) -> np.ndarray:
 
 # Button to run inference
 if st.button("Run Inference"):
+    assert -1 < phi_raw <= 1, "phi out of range"
+    assert 0 <= theta_raw <= 1, "theta out of range"
     phi = math.pi * phi_raw
-    theta = math.pi * theta_raw
-    # TODO: Replace the placeholder with your actual inference code
-   
-    # Load model parameters from external JSON
-    model_params = load_model_params("train/unitary_single_qubit_gate/model_params.json")
+    theta = math.pi * np.round(theta_raw, 3)
+
     model = CompositePulseTransformerEncoder(**model_params)
 
     # load pretrained module
 
-    model_path = "weights/universal_gate_length_100_finetune/err_{_delta_std_tensor(1.),_epsilon_std_0.05}.pt"
-    model_name = "100 Pulse Model"
     model.load_state_dict(torch.load(model_path))
     model.eval()
-
 
     SCORE_tensor, U_target = get_score_emb_unitary(phi, theta)
 
