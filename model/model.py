@@ -144,7 +144,7 @@ class CompositePulseTransformerEncoder(nn.Module):
         Generate pulses for every target unitary *U_target* (B, L, d, d).
         L represents the length of the SCORE composite pulse
         """
-
+        # U_target is the score expansion of U_target
         B = U_target.shape[0]
         L = U_target.shape[1] # Length of SCORE pulse
         D = self.d_model

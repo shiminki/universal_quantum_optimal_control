@@ -3,6 +3,5 @@ tqdm
 matplotlib
 pandas
 pwlf
-mpl_toolkits
 numpy
 streamlit

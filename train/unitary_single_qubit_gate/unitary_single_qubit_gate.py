@@ -207,30 +207,29 @@ def _rotation_unitary(axis, theta) -> torch.Tensor:
     return torch.matrix_exp(-1j * H)
 
 
-def build_dataset() -> List[torch.Tensor]:
-    axis_angles = [
-        ((1, 0, 0), torch.pi),   # X(pi)
-        ((1, 0, 0), torch.pi/2), # X(pi/2)
-        ((1, 0, 1), torch.pi),   # Hadamard
-        ((0, 0, 1), torch.pi/4)  # T-gate = Z(pi/4)
-    ]
+def unit_vec(phi):
+    n_x, n_y = math.cos(phi), math.sin(phi)
+    return (n_x, n_y, 0)
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    return torch.stack([
-        _rotation_unitary(axis, theta) 
-        for (axis, theta) in axis_angles
-    ]).to(device)
+def get_score_emb_unitary(phi, angle) -> List[torch.Tensor]:
+    unitaries = []
+    theta = math.pi - angle - math.asin(1/2 * math.sin(angle/2))
+
+    unitaries.append(_rotation_unitary(unit_vec(phi + math.pi), theta))
+    unitaries.append(_rotation_unitary(unit_vec(phi), phi + 2 * theta))
+    unitaries.append(_rotation_unitary(unit_vec(phi + math.pi), theta))
+
+    SCORE_tensor = torch.stack(unitaries)
+    target_unitary = _rotation_unitary(unit_vec(phi), angle)
+
+    return SCORE_tensor, target_unitary
 
 
 def build_score_emb_dataset(phi=0, M=100) -> List[torch.Tensor]:
     dataset = []
-
-    def unit_vec(phi):
-        n_x, n_y = math.cos(phi), math.sin(phi)
-        return (n_x, n_y, 0)
-    
-    angles = torch.rand(M) * math.pi
+    dtheta = 1/M
+    angles = torch.arange(0, 1 + dtheta, dtheta) * math.pi
 
     for angle in angles:
         unitaries = []
@@ -286,7 +285,6 @@ def main():
 
     # Load model parameters from external JSON
     model_params = load_model_params("train/unitary_single_qubit_gate/model_params.json")
-
     model = CompositePulseTransformerEncoder(**model_params)
 
     # load pretrained module
@@ -305,7 +303,7 @@ def main():
     trainer = CompositePulseTrainer(**trainer_params)
 
     train_emb_set, train_target_set = build_score_emb_dataset(M=300)
-    eval_emb_set, eval_target_set = build_score_emb_dataset(M=100)
+    eval_emb_set, eval_target_set = build_score_emb_dataset(M=300)
 
     
     #####################
