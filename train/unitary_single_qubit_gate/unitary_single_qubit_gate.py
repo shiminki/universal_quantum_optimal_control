@@ -285,7 +285,7 @@ def main():
 
 
     # Load model parameters from external JSON
-    model_params = load_model_params("train/single_qubit/model_params.json")
+    model_params = load_model_params("train/unitary_single_qubit_gate/model_params.json")
 
     model = CompositePulseTransformerEncoder(**model_params)
 
