@@ -35,7 +35,7 @@ else:
     model_params = load_model_params("demo/params/length_400.json")
 
 # User inputs for the two parameters
-phi_raw = st.number_input("Phi (units of pi from -1 to 1)", value=0.0, format="%.3f")
+phi_raw = st.number_input("Phi (units of pi from 0 to 2)", value=0.0, format="%.3f")
 theta_raw = st.number_input("Theta (units of pi from 0 to 1)", value=0.0, format="%.3f")
 
 st.write("---")
@@ -78,7 +78,7 @@ def spinor_to_bloch(psi: torch.Tensor) -> np.ndarray:
 
 # Button to run inference
 if st.button("Run Inference"):
-    assert -1 < phi_raw <= 1, "phi out of range"
+    assert 0 <= phi_raw < 2, "phi out of range"
     assert 0 <= theta_raw <= 1, "theta out of range"
     phi = math.pi * phi_raw
     theta = math.pi * np.round(theta_raw, 3)
@@ -96,7 +96,7 @@ if st.button("Run Inference"):
 
     pulse[:, 0] += phi
 
-    target_name = f"phi={phi_raw:.2f}pi, theta={theta_raw:.2f}pi"
+    target_name = f"phi={phi_raw:.3f} pi, theta={theta_raw:.3f} pi"
 
     save_dir = f"demo/dump/100_length_finetuned{target_name}"
     os.makedirs(save_dir, exist_ok=True)
