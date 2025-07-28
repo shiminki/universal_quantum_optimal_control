@@ -144,7 +144,7 @@ class CompositePulseTransformerEncoder(nn.Module):
         Generate pulses for every target unitary *U_target* (B, L, d, d).
         L represents the length of the SCORE composite pulse
         """
-
+        # U_target is the score expansion of U_target
         B = U_target.shape[0]
         L = U_target.shape[1] # Length of SCORE pulse
         D = self.d_model
@@ -175,7 +175,8 @@ class CompositePulseTransformerEncoder(nn.Module):
         pulses = low + (high - low) * pulses_unit  # (B, L, P)
 
         if self.finetune:
-            base_pulse = torch.load("combined_pulses.pt").to(pulses.device)
+            base_pulse = torch.load(self.finetune).to(pulses.device)
+            base_pulse = base_pulse.unsqueeze(0).expand(B, -1, -1)
             pulses = 0.2 * pulses + base_pulse
             
         pulses[:, :, -1] = F.relu(pulses[:, :, -1])

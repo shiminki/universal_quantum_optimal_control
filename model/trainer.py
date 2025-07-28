@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from tqdm import tqdm
+import numpy as np
 
 import matplotlib.pyplot as plt
 
@@ -135,17 +136,36 @@ class CompositePulseTrainer:
 
     def train(
         self,
-        train_set: torch.Tensor,
-        eval_set: torch.Tensor,
+        train_emb_set: torch.Tensor,
+        train_target_set: torch.Tensor,
+        eval_emb_set: torch.Tensor,
+        eval_target_set: torch.Tensor,
         error_params_list: List[Dict],  # iterate from small → large error
         eval_error_param: Dict = None,
         epochs: int = 100,
         save_path: str | Path | None = None,
-        plot: bool = False
+        plot: bool = False,
+        batch_size: int = 10
     ) -> None:
         """Optimise *model*; keep weights with **highest fidelity**."""
         self.device = str(self.device)
         self.model.to(self.device)
+
+        #########################
+        # Universal gate version
+        #########################
+
+        L_train = train_emb_set.shape[0]
+        L_eval = eval_emb_set.shape[0]
+
+
+        train_emb_batch = train_emb_set.view(L_train//batch_size,batch_size, 3, 2, 2)
+        train_target_batch = train_target_set.view(L_train//batch_size, batch_size, 2, 2)
+        eval_emb_batch = eval_emb_set.view(L_eval//batch_size, batch_size, 3, 2, 2)
+        eval_target_batch = eval_target_set.view(L_eval//batch_size, batch_size, 2, 2)
+
+
+        #########################
 
         for error_params in error_params_list:
             self.best_fidelity = 0.0
@@ -159,9 +179,20 @@ class CompositePulseTrainer:
 
             with tqdm(total=epochs, desc=f"ϵ = {error_params}", dynamic_ncols=True) as pbar:
                 for epoch in range(1, epochs + 1):
-                    train_loss = self.train_epoch(train_set, eval_set, error_distribution)
-                    
-                    eval_fid = self.evaluate(train_set, eval_set, eval_dist)
+                    train_loss_list = []
+                    eval_fid_list = []
+
+                    for train_emb, train_target in zip(train_emb_batch, train_target_batch):
+                        train_loss = self.train_epoch(train_emb, train_target, error_distribution) 
+                        train_loss_list.append(train_loss)
+
+                    for eval_emb, eval_target in zip(eval_emb_batch, eval_target_batch):
+                        eval_fid = self.evaluate(eval_emb, eval_target, error_distribution)
+                        eval_fid_list.append(eval_fid)
+
+                    train_loss = np.mean(train_loss_list)
+                    eval_fid = np.mean(eval_fid_list)
+
 
                     # Track best model
                     if eval_fid > self.best_fidelity:
@@ -169,7 +200,7 @@ class CompositePulseTrainer:
                         self.best_state = {
                             k: v.detach().cpu().clone() for k, v in self.model.state_dict().items()
                         }
-                        self.best_pulses = self.model(train_set.to(self.device)).detach().cpu()
+                        # self.best_pulses = self.model(train_set.to(self.device)).detach().cpu()
 
                     pbar.set_postfix({
                         "epoch": epoch,
@@ -204,7 +235,7 @@ class CompositePulseTrainer:
             if save_path is not None:
                 tag = os.path.join(save_path, f"err_{str(error_params).replace(' ', '')}")
                 self._save_weight(f"{tag}.pt")
-                self._save_pulses(f"{tag}_pulses.pt", train_set)
+                # self._save_pulses(f"{tag}_pulses.pt", train_set)
 
     @torch.no_grad()
     def get_average_fidelity(
