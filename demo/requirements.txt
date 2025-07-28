@@ -6,3 +6,4 @@ pwlf
 numpy
 streamlit
 qutip
+ffmpeg
