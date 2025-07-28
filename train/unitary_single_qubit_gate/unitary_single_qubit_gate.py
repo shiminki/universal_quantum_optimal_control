@@ -213,6 +213,9 @@ def unit_vec(phi):
 
 
 def get_score_emb_unitary(phi, angle) -> List[torch.Tensor]:
+    """
+    Source: https://arxiv.org/pdf/2312.08426
+    """
     unitaries = []
     theta = math.pi - angle - math.asin(1/2 * math.sin(angle/2))
 
