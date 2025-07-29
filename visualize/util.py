@@ -534,4 +534,3 @@ def animate_multi_error_bloch(
     ani.save(save_path, writer=writer, dpi=150)
     plt.close(fig)
     # ----------------------------------------------------------
-

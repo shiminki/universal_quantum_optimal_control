@@ -325,11 +325,12 @@ if st.button("Run Inference"):
 
     if run_qubit_animation:
         # 5. Qubit evolution video
-        M = 30
+        M = 10
         errors = get_ore_ple_error_distribution(batch_size=M)
         deltas, epsilons = errors[0], errors[1]
         # # uniform dist
-        deltas = np.random.random(M) * 2 - 1
+        # deltas = np.random.random(M) * 2 - 1
+        deltas = [-1 + 0.2 * i for i in range(M)]
 
         bloch_list, pulse_info_list, fidelity_list = [], [], []
 
@@ -358,7 +359,6 @@ if st.button("Run Inference"):
             pulse_info_list.append(pi)
             fidelity_list.append(np.abs(torch.vdot(target_psi, psi))**2)
         
-
 
         video_dir = os.path.join(save_dir, "qubit_evolutions")
         os.makedirs(video_dir, exist_ok=True)
