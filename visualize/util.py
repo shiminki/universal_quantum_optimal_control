@@ -24,6 +24,9 @@ from matplotlib.colors import TABLEAU_COLORS, to_rgba
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm, colors as mcolors
 
+from matplotlib.animation import FuncAnimation, FFMpegWriter
+import shutil
+
 from qutip import Bloch
 
 
@@ -515,7 +518,19 @@ def animate_multi_error_bloch(
     # Create animation
     ani = FuncAnimation(fig, update, frames=num_frames, interval=50)
     # Save and close
-    ani.save(save_path, fps=num_frames // 10, dpi=150)
+
+    # Check for ffmpeg binary
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path is None:
+        # Fall back to GIF if ffmpeg binary is not found
+        save_path = save_path.replace(".mp4", ".gif")
+        from matplotlib.animation import PillowWriter
+        writer = PillowWriter(fps=10)
+    else:
+        # Force use of ffmpeg binary
+        writer = FFMpegWriter(fps=10, codec="libx264")
+
+    ani.save(save_path, writer=writer, fps=num_frames // 10, dpi=150)
     plt.close(fig)
 
 
