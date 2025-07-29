@@ -325,7 +325,7 @@ if st.button("Run Inference"):
 
     if run_qubit_animation:
         # 5. Qubit evolution video
-        M = 10
+        M = 11
         errors = get_ore_ple_error_distribution(batch_size=M)
         deltas, epsilons = errors[0], errors[1]
         # # uniform dist
