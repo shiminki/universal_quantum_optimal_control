@@ -118,7 +118,6 @@ def euler_yxy_from_axis_angle(nx, ny, nz, theta, *, eps=1e-12):
 
 
 
-
 # Configure the Streamlit app
 st.set_page_config(page_title="Composite Pulse for Universal Gates", layout="centered")
 
@@ -193,6 +192,10 @@ U_latex = r"\begin{bmatrix}" + \
 st.latex(U_latex)
 
 
+run_fidelity_plot = st.checkbox("Run fidelity vs std plot", value=False)
+run_qubit_animation = st.checkbox("Run qubit evolution animation", value=False)
+
+
 
 # Button to run inference
 if st.button("Run Inference"):
@@ -248,13 +251,22 @@ if st.button("Run Inference"):
     pulses = []
 
     if gamma != 0:
-        pulses.append(get_pulse(gamma, np.pi/2))
+        if gamma > 0:
+            pulses.append(get_pulse(gamma, np.pi/2))
+        else:
+            pulses.append(get_pulse(-gamma, 3 * np.pi/2))
 
     if beta != 0:
-        pulses.append(get_pulse(beta, 0))
+        if beta > 0:
+            pulses.append(get_pulse(beta, 0))
+        else:
+            pulses.append(get_pulse(-beta, np.pi))
 
     if alpha != 0:
-        pulses.append(get_pulse(alpha, np.pi/2))
+        if alpha > 0:
+            pulses.append(get_pulse(alpha, np.pi/2))
+        else:
+            pulses.append(get_pulse(-alpha, 3 * np.pi/2))
 
     pulse = torch.cat(pulses, dim=0)
 
@@ -298,67 +310,68 @@ if st.button("Run Inference"):
         st.write("### Pulse Parameter Plot")
         st.image(img_path)
 
-    # 4. Fidelity vs std(delta)
-    std_dir = os.path.join(save_dir, "fidelity_vs_delta_std")
-    os.makedirs(std_dir, exist_ok=True)
-    plot_fidelity_by_std(
-        target_name, U_target, pulse, model_name,
-        std_dir, phase_only=True
-    )
-    for img_path in glob.glob(os.path.join(std_dir, "*.png")):
-        st.write("### Fidelity vs Delta Std")
-        st.image(img_path)
+    if run_fidelity_plot:
+
+        # 4. Fidelity vs std(delta)
+        std_dir = os.path.join(save_dir, "fidelity_vs_delta_std")
+        os.makedirs(std_dir, exist_ok=True)
+        plot_fidelity_by_std(
+            target_name, U_target, pulse, model_name,
+            std_dir, phase_only=True
+        )
+        for img_path in glob.glob(os.path.join(std_dir, "*.png")):
+            st.write("### Fidelity vs Delta Std")
+            st.image(img_path)
+
+    if run_qubit_animation:
+        # 5. Qubit evolution video
+        M = 30
+        errors = get_ore_ple_error_distribution(batch_size=M)
+        deltas, epsilons = errors[0], errors[1]
+        # # uniform dist
+        deltas = np.random.random(M) * 2 - 1
+
+        bloch_list, pulse_info_list, fidelity_list = [], [], []
+
+        # target state
+        PSI_INIT = torch.tensor([1, 0], dtype=torch.cfloat)
+        target_psi = U_target @ PSI_INIT
+
+        # for eps in epsilons:
+        #     for delt in deltas:
+        for eps, delt in zip(epsilons, deltas):
+            # simulate
+            psi = PSI_INIT
+            bv, pi = [], []
+            # tau = 0
+            for p in df.itertuples():
+                g = generate_unitary
+                U = g(p, delta=delt, epsilon=eps)
+                psi = U @ psi
+                bv.append(spinor_to_bloch(psi))
+                
+                # tau += p[2]
+                pi.append((0, p[1], p[2]))
+                
+
+            bloch_list.append(np.vstack(([spinor_to_bloch(PSI_INIT)], bv)))
+            pulse_info_list.append(pi)
+            fidelity_list.append(np.abs(torch.vdot(target_psi, psi))**2)
+        
 
 
-    # 5. Qubit evolution video
-    M = 30
-    errors = get_ore_ple_error_distribution(batch_size=M)
-    deltas, epsilons = errors[0], errors[1]
-    # # uniform dist
-    deltas = np.random.random(M) * 2 - 1
+        video_dir = os.path.join(save_dir, "qubit_evolutions")
+        os.makedirs(video_dir, exist_ok=True)
+        animate_multi_error_bloch(
+            bloch_list, pulse_info_list, fidelity_list,
+            deltas, epsilons,
+            name=f"Ensemble Evolution of {target_name}",
+            save_path=os.path.join(video_dir, f"{target_name}.mp4"),
+            phase_only=True
+        )
+        # Display video
+        st.write("### Qubit Evolution Video")
+        for vid_path in glob.glob(os.path.join(video_dir, "*.mp4")):
+            st.video(vid_path)
 
-    bloch_list, pulse_info_list, fidelity_list = [], [], []
-
-    # target state
-    PSI_INIT = torch.tensor([1, 0], dtype=torch.cfloat)
-    target_psi = U_target @ PSI_INIT
-
-    # for eps in epsilons:
-    #     for delt in deltas:
-    for eps, delt in zip(epsilons, deltas):
-        # simulate
-        psi = PSI_INIT
-        bv, pi = [], []
-        # tau = 0
-        for p in df.itertuples():
-            g = generate_unitary
-            U = g(p, delta=delt, epsilon=eps)
-            psi = U @ psi
-            bv.append(spinor_to_bloch(psi))
-            
-            # tau += p[2]
-            pi.append((0, p[1], p[2]))
-            
-
-        bloch_list.append(np.vstack(([spinor_to_bloch(PSI_INIT)], bv)))
-        pulse_info_list.append(pi)
-        fidelity_list.append(np.abs(torch.vdot(target_psi, psi))**2)
-    
-
-
-    video_dir = os.path.join(save_dir, "qubit_evolutions")
-    os.makedirs(video_dir, exist_ok=True)
-    animate_multi_error_bloch(
-        bloch_list, pulse_info_list, fidelity_list,
-        deltas, epsilons,
-        name=f"Ensemble Evolution of {target_name}",
-        save_path=os.path.join(video_dir, f"{target_name}.mp4"),
-        phase_only=True
-    )
-    # Display video
-    st.write("### Qubit Evolution Video")
-    for vid_path in glob.glob(os.path.join(video_dir, "*.mp4")):
-        st.video(vid_path)
-
-    st.success("Inference complete and results displayed below.")
-
+        st.success("Inference complete and results displayed below.")
