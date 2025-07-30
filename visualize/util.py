@@ -259,7 +259,7 @@ def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000,
     plt.colorbar(contour, label='Fidelity')
     plt.xlabel(r"$\delta / \Omega_{\max} \sim N(0, 1)$")
     plt.ylabel(r"$\epsilon / \Omega_{\max} \sim N(0, 0.05^2)$")
-    plt.title(f"Fidelity Surface for {target_name} of {name}\nE[F] = {F_mean:.4f} +/- {F_err:.4f}\nTotal Evolution Time: {total_time:.2f} pi")
+    plt.title(f"{target_name} of {name}\nE[F] = {F_mean:.4f} +/- {F_err:.4f}\nTotal Evolution Time: {total_time:.2f} pi")
     plt.grid(True)
 
     os.makedirs(save_dir, exist_ok=True)
@@ -420,6 +420,8 @@ def plot_fidelity_by_std(target_name, U_target, pulse, name, save_dir, M=10000, 
 # Qubit Ensemble Evolution Video #####
 ######################################
 
+
+
 def animate_multi_error_bloch(
     bloch_vectors_list,   # list of arrays (T x 3)
     pulse_info_list,      # list of lists of pulse tuples
@@ -431,24 +433,22 @@ def animate_multi_error_bloch(
     phase_only=True
 ):
     num_qubits = len(bloch_vectors_list)
-
     num_frames = bloch_vectors_list[0].shape[0]
 
     # Prepare colors and legend handles
-    # colors = list(TABLEAU_COLORS.values())
-    norm  = mcolors.Normalize(vmin=min(delta_list), vmax=max(delta_list))
-    cmap  = cm.get_cmap('viridis')   # or any other built-in colormap
-    colors = [cmap(norm(d)) for d in delta_list]
-    
+    colors = list(TABLEAU_COLORS.values())[:num_qubits + 1]
+
+    legend_handles = []
+    for idx in range(num_qubits):
+        i_eps = idx // len(delta_list)
+        j_del = idx % len(delta_list)
+        lbl = fr"$\delta$={delta_list[j_del]:.2f}, F={fidelity_list[idx]:.4f}"
+        legend_handles.append(Line2D([0], [0], color=colors[idx % 10], lw=2, label=lbl))
+
     # Create figure and axis
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection='3d')
     fig.suptitle(name, fontsize=14)
-
-    sm = cm.ScalarMappable(norm=norm, cmap=cmap)
-    sm.set_array(delta_list)   # any sequence of length ≥1 works
-    cbar = fig.colorbar(sm, ax=ax, shrink=0.7, pad=0.1)
-    cbar.set_label(r'Detuning $\delta$')
 
     # Initialize Bloch object with our axes
     b = Bloch(fig=fig, axes=ax)
@@ -472,6 +472,7 @@ def animate_multi_error_bloch(
     # cumulative time (in units of π)
     cumulative_times = np.cumsum(step_times) / np.pi
 
+    
     def update(frame):
         # Clear previous frame
         b.clear()
@@ -481,15 +482,11 @@ def animate_multi_error_bloch(
             traj = bloch_vectors_list[i][: frame + 1]
             xs, ys, zs = traj[:, 0].tolist(), traj[:, 1].tolist(), traj[:, 2].tolist()
             # trajectory line
-            # b.add_points([xs, ys, zs], meth='l', colors=[to_rgba(colors[i % len(colors)]) for _ in range(3)], alpha=0.5)
-            b.add_points([xs, ys, zs],
-                         meth='l',
-                         colors=[colors[i]]*len(xs),
-                         alpha=0.5)
+            b.add_points([xs, ys, zs], meth='l', colors=[to_rgba(colors[i % 10]) for _ in range(3)], alpha=0.5)
             # head of trajectory
-            vec = bloch_vectors_list[i][frame]
-            b.add_vectors([vec], colors=[colors[i]])
+            vec = bloch_vectors_list[i][frame].tolist()
 
+            b.add_vectors([vec], colors=colors[i % 10])
             # Hamiltonian arrow
             if pulse_info_list and frame < len(pulse_info_list[i]):
                 if not phase_only:
@@ -501,36 +498,167 @@ def animate_multi_error_bloch(
                     # ham_vec = [np.cos(phi), np.sin(phi), 0]
                 
         T = cumulative_times[frame]
-        F_mean = np.mean(fidelity_list)
-        F_err = np.std(fidelity_list) / np.sqrt(len(fidelity_list))
         title_str = (
             f"{name}\n"
             fr"Total Time: {T:.4f}$\pi$"
-            f"\nExpected Fidelity: {F_mean:.4f} +/- {F_err:.4f}"
+            f"\nE[F] = {np.mean(fidelity_list):.4f} +/- {(np.std(fidelity_list) / np.sqrt(len(fidelity_list))):.4f}"
         )
         fig.suptitle(title_str, fontsize=14)
         # Draw sphere and elements
         b.make_sphere()
         b.render()
         # Add legend
-        # ax.legend(handles=legend_handles, loc='upper right', bbox_to_anchor=(1.05, 1.0), fontsize=8)
+        ax.legend(handles=legend_handles, loc='upper right', bbox_to_anchor=(1.05, 1.0), fontsize=8)
 
     # Create animation
     ani = FuncAnimation(fig, update, frames=num_frames, interval=50)
-    
-    # ----------------------------------------------------------
-    # choose a writer once
-    ffmpeg_path = shutil.which("ffmpeg")
-    if ffmpeg_path:                              # MP4 via ffmpeg
-        writer = FFMpegWriter(
-            fps=num_frames // 10,                # set FPS *here*
-            codec="libx264"
-        )
-    else:                                        # fallback: GIF
-        save_path = os.path.splitext(save_path)[0] + ".gif"
-        writer = PillowWriter(fps=num_frames // 10)
-
-    # save –‑‑ NO fps / codec / bitrate / … here!
-    ani.save(save_path, writer=writer, dpi=150)
+    # Save and close
+    ani.save(save_path, fps=30, dpi=150)
     plt.close(fig)
-    # ----------------------------------------------------------
+
+
+
+
+# def animate_multi_error_bloch(
+#     bloch_vectors_list,      # list of (P x 3) arrays – one row per pulse end‑point
+#     pulse_info_list,         # list[ list[pulse_tuple] ]
+#     fidelity_list,           # list[float]
+#     delta_list,              # list[float]
+#     epsilon_list,            # list[float]
+#     name: str,
+#     save_path="multi_bloch_qutip.mp4",
+#     phase_only=True,
+#     time_subdiv: float=0.2,    # ↑  set to 1 → Δt = min τ ; 2 → half that; etc.
+# ):
+#     """
+#     Make a movie in which *each* frame stands for a fixed span Δt (same for
+#     every qubit and every pulse).  The smallest pulse duration in the whole
+#     experiment is used as the base time‑step and can be subdivided further
+#     with `time_subdiv`.
+
+#     Parameters
+#     ----------
+#     time_subdiv : int, optional
+#         Bigger value → finer time resolution (and more frames).  For example,
+#         time_subdiv = 2 means Δt = min(τ) / 2.
+#     """
+#     # ------------------------------------------------------------------
+#     # ❶ Pre‑compute some constants we will need many times
+#     # ------------------------------------------------------------------
+#     num_qubits     = len(bloch_vectors_list)
+#     num_pulses     = bloch_vectors_list[0].shape[0]          # old “frames”
+#     tau_idx        = 2 if phase_only else 4                  # where τ lives
+
+#     # pulse k → average τ_k  (same length we used before)
+#     step_times = [
+#         np.mean([pulse_info_list[i][k][tau_idx] for i in range(num_qubits)])
+#         for k in range(num_pulses - 1)
+#     ]
+
+#     # smallest pulse duration → our base Δt  (optionally subdivided)
+#     non_zero_times = [t for t in step_times if t > 0]
+#     if not non_zero_times:
+#         raise ValueError("All pulse durations are zero—nothing to animate.")
+#     dt = min(non_zero_times) / time_subdiv        # <-- now float‑safe
+#     # -------------------------------------------------------------
+
+#     # how many frames does pulse k contribute?
+#     frames_per_pulse = [
+#         max(1, int(round(t / dt))) for t in step_times
+#     ]
+#     # total number of *new* frames after resampling
+#     total_frames = sum(frames_per_pulse)
+
+#     # map “new frame index f  →  pulse index k”
+#     pulse_idx_for_frame = np.concatenate([
+#         np.full(nf, k, dtype=int) for k, nf in enumerate(frames_per_pulse)
+#     ])
+
+#     # ------------------------------------------------------------------
+#     # ❷ Build resampled Bloch trajectories (same length for all qubits)
+#     # ------------------------------------------------------------------
+#     new_bloch_vectors_list = []
+#     for i in range(num_qubits):
+#         traj = []
+#         for k, n_frames in enumerate(frames_per_pulse):
+#             traj.extend([bloch_vectors_list[i][k]] * n_frames)   # repeat
+#         new_bloch_vectors_list.append(np.vstack(traj))           # (T' x 3)
+
+#     # ------------------------------------------------------------------
+#     # ❸ Figure & Bloch initialisation  (unchanged except for colours)
+#     # ------------------------------------------------------------------
+#     norm   = mcolors.Normalize(vmin=min(delta_list), vmax=max(delta_list))
+#     cmap   = cm.get_cmap('viridis')
+#     colors = [cmap(norm(d)) for d in delta_list]
+
+#     fig = plt.figure(figsize=(8, 8))
+#     ax  = fig.add_subplot(111, projection='3d')
+#     fig.suptitle(name, fontsize=14)
+
+#     sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+#     sm.set_array(delta_list)
+#     cbar = fig.colorbar(sm, ax=ax, shrink=0.7, pad=0.1)
+#     cbar.set_label(r'Detuning $\delta$')
+
+#     b = Bloch(fig=fig, axes=ax)
+#     b.view          = [20, 45]
+#     b.vector_color  = colors
+#     b.point_color   = colors
+
+#     # ------------------------------------------------------------------
+#     # ❹ Animation callback
+#     # ------------------------------------------------------------------
+#     def update(frame: int):
+#         b.clear()
+
+#         # draw trajectories up to *this* resampled frame
+#         for i in range(num_qubits):
+#             traj = new_bloch_vectors_list[i][:frame + 1]
+#             xs, ys, zs = traj[:, 0], traj[:, 1], traj[:, 2]
+#             b.add_points([xs, ys, zs], meth='l',
+#                          colors=[colors[i % num_qubits]] * len(xs), alpha=0.5)
+
+#             vec = new_bloch_vectors_list[i][frame]
+#             b.add_vectors([vec], colors=[colors[i % num_qubits]])
+
+#             # show current control Hamiltonian arrow
+#             k = pulse_idx_for_frame[frame]               # active pulse
+#             if not phase_only:
+#                 _, D, O, phi, _ = pulse_info_list[i][k]
+#                 ham_vec = [O * np.cos(phi), O * np.sin(phi), D]
+#                 b.add_vectors([ham_vec])
+#             else:
+#                 # phase‑only → arrow lies in x‑y plane
+#                 _, phi, _ = pulse_info_list[i][k]
+#                 ham_vec = [np.cos(phi), np.sin(phi), 0]
+#                 b.add_vectors([ham_vec])
+
+#         # title with running time (π‑units) & fidelity summary
+#         T_pi   = (frame + 1) * dt / np.pi       # time elapsed in units of π
+#         F_mean = np.mean(fidelity_list)
+#         F_err  = np.std(fidelity_list) / np.sqrt(len(fidelity_list))
+#         fig.suptitle(
+#             f"{name}\n"
+#             fr"Total Time: {T_pi:.4f}$\pi$"
+#             f"\nExpected Fidelity: {F_mean:.4f} ± {F_err:.4f}",
+#             fontsize=14,
+#         )
+
+#         b.make_sphere()
+#         b.render()
+        
+
+#     # ------------------------------------------------------------------
+#     # ❺ Build & save movie
+#     # ------------------------------------------------------------------
+#     ani = FuncAnimation(fig, update, frames=total_frames, interval=50)
+
+#     ffmpeg_path = shutil.which("ffmpeg")
+#     if ffmpeg_path:
+#         writer = FFMpegWriter(fps=max(1, total_frames // 10), codec="libx264")
+#     else:
+#         save_path = os.path.splitext(save_path)[0] + ".mp4"
+#         writer    = PillowWriter(fps=max(1, total_frames // 10))
+
+#     ani.save(save_path, writer=writer, dpi=150)
+#     plt.close(fig)

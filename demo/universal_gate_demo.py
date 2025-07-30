@@ -225,13 +225,47 @@ if st.button("Run Inference"):
 
     st.write(decompose_msg)
 
-    alpha, beta, gamma = euler_yxy_from_axis_angle(n_x, n_y, n_z, theta)
+    if n_z != 0:
 
-    U_out = Ry(alpha) @ Rx(beta) @ Ry(gamma)
+        alpha, beta, gamma = euler_yxy_from_axis_angle(n_x, n_y, n_z, theta)
+        pulses = []
 
-    result_msg = (
-        fr"$U = R_y({alpha:.3f}) R_x({beta:.3f}) R_y({gamma:.3f})$"
-    )
+        if gamma != 0:
+            if gamma > 0:
+                pulses.append(get_pulse(gamma, np.pi/2))
+            else:
+                pulses.append(get_pulse(-gamma, 3 * np.pi/2))
+
+        if beta != 0:
+            if beta > 0:
+                pulses.append(get_pulse(beta, 0))
+            else:
+                pulses.append(get_pulse(-beta, np.pi))
+
+        if alpha != 0:
+            if alpha > 0:
+                pulses.append(get_pulse(alpha, np.pi/2))
+            else:
+                pulses.append(get_pulse(-alpha, 3 * np.pi/2))
+
+        pulse = torch.cat(pulses, dim=0)
+
+        U_out = Ry(alpha) @ Rx(beta) @ Ry(gamma)
+
+        result_msg = (
+            fr"$U = R_y({alpha:.3f}) R_x({beta:.3f}) R_y({gamma:.3f})$"
+        )
+
+    else:
+        phi = np.arctan2(n_y, n_x)
+        if theta >= np.pi:
+            theta = 2 * np.pi - theta
+            phi = phi + np.pi
+        pulse = get_pulse(theta, phi)
+
+        result_msg = fr"$U = R(\phi = {phi:.3f}, \theta = {theta:.3f})$"
+
+        U_out = expm(-1j * (math.cos(phi) * _SIGMA_X_CPU + math.sin(phi) * _SIGMA_Y_CPU) * theta/2)
 
     st.write(result_msg)
 
@@ -248,27 +282,7 @@ if st.button("Run Inference"):
     save_dir = f"demo/dump/{model_option}_finetuned{target_name}"
     os.makedirs(save_dir, exist_ok=True)
 
-    pulses = []
-
-    if gamma != 0:
-        if gamma > 0:
-            pulses.append(get_pulse(gamma, np.pi/2))
-        else:
-            pulses.append(get_pulse(-gamma, 3 * np.pi/2))
-
-    if beta != 0:
-        if beta > 0:
-            pulses.append(get_pulse(beta, 0))
-        else:
-            pulses.append(get_pulse(-beta, np.pi))
-
-    if alpha != 0:
-        if alpha > 0:
-            pulses.append(get_pulse(alpha, np.pi/2))
-        else:
-            pulses.append(get_pulse(-alpha, 3 * np.pi/2))
-
-    pulse = torch.cat(pulses, dim=0)
+    
 
 
     # 1. Load and save plot param csv
