@@ -5,3 +5,7 @@ pandas
 pwlf
 numpy
 streamlit
+qutip
+ffmpeg
+gradio
+ffmpeg-python
