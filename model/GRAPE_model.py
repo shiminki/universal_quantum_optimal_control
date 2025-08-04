@@ -74,4 +74,6 @@ class GRAPE(nn.Module):
 
         pulses = low + (high - low) * pulses_unit  # shape: (B, L, P)
 
+        pulses[:, :, -1] = F.relu(pulses[:, :, -1])
+
         return pulses
