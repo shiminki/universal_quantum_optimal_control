@@ -290,7 +290,7 @@ def main():
 
 
     # 5% PLE error'
-    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.65, 0.3)]
+    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
     
     trainer.train(
         train_emb_set,
