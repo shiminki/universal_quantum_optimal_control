@@ -209,10 +209,12 @@ def _rotation_unitary(axis, theta) -> torch.Tensor:
 
 def build_dataset() -> torch.Tensor:
     axis_angles = [
-        ((1, 0, 0), torch.pi),   # X(pi)
-        ((1, 0, 0), torch.pi/2), # X(pi/2)
-        ((1, 0, 1), torch.pi),   # Hadamard
-        ((0, 0, 1), torch.pi/4)  # T-gate = Z(pi/4)
+        ((1, 0, 0), torch.pi/4),
+        ((1, 0, 0), torch.pi/3),
+        ((1, 0, 0), torch.pi/2),
+        ((1, 0, 0), torch.pi * 2 / 3),
+        ((1, 0, 0), torch.pi * 3 / 4),
+        ((1, 0, 0), torch.pi)
     ]
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
