@@ -41,7 +41,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
-from model.model import CompositePulseTransformerEncoder
+from model.GRAPE_model import GRAPE
 from model.trainer import CompositePulseTrainer
 
 
@@ -207,7 +207,7 @@ def _rotation_unitary(axis, theta) -> torch.Tensor:
     return torch.matrix_exp(-1j * H)
 
 
-def build_dataset() -> List[torch.Tensor]:
+def build_dataset() -> torch.Tensor:
     axis_angles = [
         ((1, 0, 0), torch.pi),   # X(pi)
         ((1, 0, 0), torch.pi/2), # X(pi/2)
@@ -220,52 +220,13 @@ def build_dataset() -> List[torch.Tensor]:
     return torch.stack([
         _rotation_unitary(axis, theta) 
         for (axis, theta) in axis_angles
-    ]).to(device)
+    ], dim=0).unsqueeze(1).to(device)  # shape: (4, 1, 2, 2)
 
 
-def build_score_emb_dataset(phi=0) -> List[torch.Tensor]:
-    angle_vec_dict = {
-        1/4 : [1.34820, 1.32669, 1.77042, 2.16800],
-        1/3 : [1.41901, 1.35864, 1.77664, 2.13759],
-        1/2 : [1.55280, 1.42267, 1.78586, 2.07559],
-        2/3 : [1.67478, 1.47865, 1.78919, 2.02043],
-        3/4 : [1.73053, 1.49972, 1.78853, 1.99939],
-        1   : [1.87342, 1.52524, 1.78436, 1.97330]
-    }
+def unit_vec(phi):
+    n_x, n_y = math.cos(phi), math.sin(phi)
+    return (n_x, n_y, 0)
 
-    dataset = []
-
-    def unit_vec(phi):
-        n_x, n_y = math.cos(phi), math.sin(phi)
-        return (n_x, n_y, 0)
-
-    for angle in angle_vec_dict:
-        unitaries = []
-        center_angle = angle * math.pi
-        angle_vec = angle_vec_dict[angle]
-
-        for i, theta in enumerate(angle_vec):
-            unitaries.append(_rotation_unitary(unit_vec(phi + (i % 2) * math.pi), theta * math.pi))
-            center_angle += (-1)**(len(angle_vec) - 1 - i) * 2 * theta * math.pi
-        
-        unitaries.append(_rotation_unitary(unit_vec(phi), center_angle))
-
-        for i, theta in reversed(list(enumerate(angle_vec))):
-            unitaries.append(_rotation_unitary(unit_vec(phi + (i % 2) * math.pi), theta * math.pi))
-
-        dataset.append(torch.stack(unitaries))
-
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    SCORE_tensors = torch.stack(dataset).to(device)
-
-    original_tensors = torch.stack([
-        _rotation_unitary(unit_vec(phi), angle * math.pi)
-        for angle in angle_vec_dict
-    ]).to(device)
-
-    return SCORE_tensors, original_tensors
 
 
 ###############################################################################
@@ -298,9 +259,8 @@ def main():
 
 
     # Load model parameters from external JSON
-    model_params = load_model_params("train/single_qubit/model_params.json")
-
-    model = CompositePulseTransformerEncoder(**model_params)
+    model_params = load_model_params("train/GRAPE/model_params.json")
+    model = GRAPE(**model_params)
 
     # load pretrained module
 
@@ -316,9 +276,11 @@ def main():
     }
 
     trainer = CompositePulseTrainer(**trainer_params)
-    # train_set = build_dataset()
-    # eval_set = build_dataset()
-    train_set, eval_set = build_score_emb_dataset()
+
+    train_emb_set = build_dataset()  # shape: (4, 2, 2)
+    train_target_set = build_dataset()  # shape: (4, 2, 2)
+    eval_emb_set = build_dataset()  # shape: (4, 2, 2)
+    eval_target_set = build_dataset()  # shape: (4, 2,
     
     #####################
     ## Training #########
@@ -329,12 +291,15 @@ def main():
     error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.65, 0.3)]
     
     trainer.train(
-        train_set,
-        eval_set,
+        train_emb_set,
+        train_target_set,
+        eval_emb_set,
+        eval_target_set,
         error_params_list=error_params_list,
         epochs=args.num_epoch,
         save_path=args.save_path,
-        plot=True
+        plot=True,
+        batch_size=1
     )
 
 

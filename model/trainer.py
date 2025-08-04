@@ -158,10 +158,11 @@ class CompositePulseTrainer:
         L_train = train_emb_set.shape[0]
         L_eval = eval_emb_set.shape[0]
 
+        SCORE_length = train_emb_set.shape[1]
 
-        train_emb_batch = train_emb_set.view(L_train//batch_size,batch_size, 3, 2, 2)
+        train_emb_batch = train_emb_set.view(L_train//batch_size,batch_size, SCORE_length, 2, 2)
         train_target_batch = train_target_set.view(L_train//batch_size, batch_size, 2, 2)
-        eval_emb_batch = eval_emb_set.view(L_eval//batch_size, batch_size, 3, 2, 2)
+        eval_emb_batch = eval_emb_set.view(L_eval//batch_size, batch_size, SCORE_length, 2, 2)
         eval_target_batch = eval_target_set.view(L_eval//batch_size, batch_size, 2, 2)
 
 
