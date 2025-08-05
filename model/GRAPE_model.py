@@ -41,6 +41,9 @@ class GRAPE(nn.Module):
         )  # (P, 2)
         
         self.num_param = self.param_ranges.shape[0]
+
+        assert self.num_param == 2, "Only supports 2 parameters (phase and time) for now."
+
         self.pulse_length = num_pulses
 
         self.device = device
@@ -50,8 +53,12 @@ class GRAPE(nn.Module):
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Initialize neural network parameters for pulse optimization
-        self.layer = nn.Linear(8, self.pulse_length * self.num_param, bias=False) # 8 -> L * P
-
+        L = self.pulse_length * 3
+        self.layer = nn.Sequential(
+            nn.Linear(8, L, bias=False),
+            nn.ReLU(),
+            nn.Linear(L, L, bias=False)
+        )
     def forward(self, U_target: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the GRAPE model.
@@ -64,11 +71,14 @@ class GRAPE(nn.Module):
         """
         # Apply the GRAPE optimization logic here
         B = U_target.shape[0]  # batch size
-        pulse_norm = self.layer(_to_real_vector(U_target))  # shape: (B, L * P)
-        pulse_norm = pulse_norm.reshape(B, self.pulse_length, self.num_param) # (B, L, P)
+        pulse_norm = self.layer(_to_real_vector(U_target))  # shape: (B, L * 3)
+        pulse_norm = pulse_norm.reshape(B, self.pulse_length, self.num_param) # (B, L, 3)
 
         # Normalize the pulse parameters to their respective ranges
-        pulses_unit = pulse_norm.sigmoid()
+        pulse_norm = pulse_norm.sigmoid() # [ux, uy, tau] in (0, 1)
+        phi = torch.atan2(pulse_norm[:, :, 1], pulse_norm[:, :, 0])
+        tau = pulse_norm[:, :, 2]
+        pulses_unit = torch.stack((phi, tau), dim=-1) # shape: (B, L, 2
         low = self.param_ranges[:, 0].to(pulses_unit.device)
         high = self.param_ranges[:, 1].to(pulses_unit.device)
 
