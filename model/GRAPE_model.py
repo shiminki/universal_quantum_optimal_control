@@ -72,7 +72,7 @@ class GRAPE(nn.Module):
         # Apply the GRAPE optimization logic here
         B = U_target.shape[0]  # batch size
         pulse_norm = self.layer(_to_real_vector(U_target))  # shape: (B, L * 3)
-        pulse_norm = pulse_norm.reshape(B, self.pulse_length, self.num_param) # (B, L, 3)
+        pulse_norm = pulse_norm.reshape(B, self.pulse_length, 3) # (B, L, 3)
 
         # Normalize the pulse parameters to their respective ranges
         pulse_norm = pulse_norm.sigmoid() # [ux, uy, tau] in (0, 1)
