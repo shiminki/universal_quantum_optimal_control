@@ -5,8 +5,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from util import *
 
-from train.single_qubit.single_qubit_script import batched_unitary_generator
-
 
 #######################################################
 # Qubit Ensemble Evolution Video Helper Functions #####
@@ -45,38 +43,15 @@ def spinor_to_bloch(psi: torch.Tensor) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    # model_name = "Transformer_Phase_Control_Only"
-    # phase_control_only = True
-    # pulse_dir = "weights/phase_control/err_{'delta_std':tensor(1.3000),'epsilon_std':0.05}_pulses.pt"
-    # save_dir = "figures/phase_control_only"
 
+    from train.unitary_single_qubit_gate.unitary_single_qubit_gate import batched_unitary_generator
+    # from train.GRAPE.grape_train import *
 
-    # model_name = "Transformer_old_CP"
-    # phase_control_only = False
-    # pulse_dir = "Old Files/weights/single_qubit_control/SCORE Embedding/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-    # save_dir = "figures/old_CP"
-
-    # tau_max = "0.07"
-
-    model_name = f"Transformer_Phase_Control_1600_pulse_finetuned_iter2"
+    model_name = "Transformer"
     phase_control_only = True
-    # pulse_dir = "weights/length_1600/1600_pulse_length_pretrain_tau_max_0.2/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-    pulse_dir = "weights/1600_pulse_length_pretrain_tau_max_0.2_finetune_iter2/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-    save_dir = f"figures/phase_control_1600_pulse_finetuned_iter2"
-
-    # model_name = "Transformer_output_postprocessed"
-    # phase_control_only = True
-    # pulse_dir = "weights/fine_tuned_pulse/err_{_delta_std_tensor(1.),_epsilon_std_0.05}_pulses.pt"
-    # save_dir = "figures/finetuned_pulse_uniform_dist"
-
+    pulse_dir = "weights/100/longer_tau_min/err_{'delta_std':tensor(1.),'epsilon_std':0.05}_pulses.pt"
+    save_dir = f"figures/transformer/"
     SCORE_embedding = True
-
-    # model_name = "SCORE4 Pulse"
-    # phase_control_only = True
-    # pulse_dir = "weights/SCORE_Pulse/SCORE_pulse.pt"
-    # save_dir = "figures/SCORE4"
-
-    # SCORE_embedding = True
 
 
     pulses = torch.load(pulse_dir)
@@ -97,11 +72,14 @@ if __name__ == "__main__":
             fr"$R_X$({n:.2f}$\pi$)"
             for n in (1/4, 1/3, 1/2, 2/3, 3/4, 1)
         ]
+
+        # train_set = train_set[2:3]
+        # train_set_name = train_set_name[2:3]
     else:
-        train_set = build_dataset() # [4, 2, 2]
+        train_set = build_dataset().squeeze(1) # [1, 2, 2]
 
         train_set_name = [
-            "X(pi)", "X(pi-2)", "Hadamard", "Z(pi-4)"
+            "X(pi-2)"
         ]
 
     
@@ -146,11 +124,11 @@ if __name__ == "__main__":
         print("Generating qubit evolution video")
         # deltas = [-2, -1, -0.5, 0, 0.5, 1, 2]
         # epsilons = [0]
-        M = 30
+        M = 11
         errors = get_ore_ple_error_distribution(batch_size=M)
         deltas, epsilons = errors[0], errors[1]
         # # uniform dist
-        # deltas = np.random.random(M) * 2 - 1
+        deltas = [-1 + 0.2 * i for i in range(M)]
 
         bloch_list, pulse_info_list, fidelity_list = [], [], []
 

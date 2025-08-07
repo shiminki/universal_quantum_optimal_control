@@ -3,6 +3,10 @@ from scipy.linalg import expm
 from scipy.optimize import minimize
 import time
 
+DELTA_STD = 0.4  # standard deviation of detuning error
+EPSILON_STD = 0.05  # standard deviation of amplitude error
+
+
 # Pauli matrices
 def pauli_matrices():
     X = np.array([[0, 1], [1, 0]], dtype=complex)
@@ -14,8 +18,8 @@ def pauli_matrices():
 def sample_errors(n_samples, seed=None):
     if seed is not None:
         np.random.seed(seed)
-    delta = np.random.normal(0, 1, size=n_samples)
-    eps   = np.random.normal(0, 0.05, size=n_samples)
+    delta = np.random.normal(0, DELTA_STD, size=n_samples)
+    eps   = np.random.normal(0, EPSILON_STD, size=n_samples)
     return delta, eps
 
 # Build phi(t) from parameters and frequencies
@@ -125,14 +129,16 @@ if __name__ == '__main__':
     X, Y, Z = pauli_matrices()
     U_target = expm(-1j * (np.pi/2) * X / 2)
 
+    N = 2000
+
     params, fid = dcrab_optimize(U_target,
                                  T=6.0,
                                  dt=0.01,
-                                 N_modes=12,
+                                 N_modes=N,
                                  rounds=5,
                                  samples=200,
                                  w_min=0.1,
-                                 w_max=15.0,
+                                 w_max=N * np.pi,
                                  seed=42)
     print(f"Best fidelity: {fid:.6f}")
     # params is a tuple (optimized params array, omegas array)

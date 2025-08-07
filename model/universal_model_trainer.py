@@ -12,19 +12,19 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from model.model import CompositePulseTransformerEncoder
+from model.universal_model import UniversalQOCTransformer
 
 
 __all__ = ["CompositePulseTrainer"]
 
 
-class CompositePulseTrainer:
+class UniversalModelTrainer:
     """Trainer for :class:`CompositePulseTransformerDecoder`."""
 
     def __init__(
         self,
         # model: Union[CompositePulseTransformerDecoder, CompositePulseTransformerEncoder],
-        model: CompositePulseTransformerEncoder,
+        model: UniversalQOCTransformer,
         unitary_generator: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
         error_sampler: Callable[[int], torch.Tensor],
         *,
@@ -136,12 +136,11 @@ class CompositePulseTrainer:
 
     def train(
         self,
-        train_emb_set: torch.Tensor,
-        train_target_set: torch.Tensor,
-        eval_emb_set: torch.Tensor,
-        eval_target_set: torch.Tensor,
+        train_rotation_vec: torch.Tensor,
+        train_unitaries: torch.Tensor,
+        eval_rotation_vec: torch.Tensor,
+        eval_unitaries: torch.Tensor,
         error_params_list: List[Dict],  # iterate from small → large error
-        eval_error_param: Dict = None,
         epochs: int = 100,
         save_path: str | Path | None = None,
         plot: bool = False,
@@ -155,16 +154,14 @@ class CompositePulseTrainer:
         # Universal gate version
         #########################
 
-        L_train = train_emb_set.shape[0]
-        L_eval = eval_emb_set.shape[0]
+        L_train = train_rotation_vec.shape[0]
+        L_eval = eval_rotation_vec.shape[0]
 
-        SCORE_length = train_emb_set.shape[1]
 
-        train_emb_batch = train_emb_set.view(L_train//batch_size,batch_size, SCORE_length, 2, 2)
-        train_target_batch = train_target_set.view(L_train//batch_size, batch_size, 2, 2)
-        eval_emb_batch = eval_emb_set.view(L_eval//batch_size, batch_size, SCORE_length, 2, 2)
-        eval_target_batch = eval_target_set.view(L_eval//batch_size, batch_size, 2, 2)
-
+        train_rotation_batch = train_rotation_vec.view(L_train//batch_size,batch_size, 4)
+        train_target_batch = train_unitaries.view(L_train//batch_size, batch_size, 2, 2)
+        eval_rotation_batch = eval_rotation_vec.view(L_eval//batch_size, batch_size, 4)
+        eval_target_batch = eval_unitaries.view(L_eval//batch_size, batch_size, 2, 2)
 
         #########################
 
@@ -179,11 +176,11 @@ class CompositePulseTrainer:
                     train_loss_list = []
                     eval_fid_list = []
 
-                    for train_emb, train_target in zip(train_emb_batch, train_target_batch):
+                    for train_emb, train_target in zip(train_rotation_batch, train_target_batch):
                         train_loss = self.train_epoch(train_emb, train_target, error_distribution) 
                         train_loss_list.append(train_loss)
 
-                    for eval_emb, eval_target in zip(eval_emb_batch, eval_target_batch):
+                    for eval_emb, eval_target in zip(eval_rotation_batch, eval_target_batch):
                         eval_fid = self.evaluate(eval_emb, eval_target, error_distribution)
                         eval_fid_list.append(eval_fid)
 
@@ -231,7 +228,7 @@ class CompositePulseTrainer:
             if save_path is not None:
                 tag = os.path.join(save_path, f"err_{str(error_params).replace(' ', '')}")
                 self._save_weight(f"{tag}.pt")
-                self._save_pulses(f"{tag}_pulses.pt", train_emb_set)
+                self._save_pulses(f"{tag}_pulses.pt", train_rotation_vec)
 
     @torch.no_grad()
     def get_average_fidelity(

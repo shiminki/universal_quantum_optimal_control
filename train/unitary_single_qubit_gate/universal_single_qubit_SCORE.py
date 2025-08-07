@@ -40,9 +40,8 @@ import os
 # Add the project root to the system path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
-
-from model.model import CompositePulseTransformerEncoder
-from model.trainer import CompositePulseTrainer
+from model.universal_model import UniversalQOCTransformer
+from model.universal_model_trainer import UniversalModelTrainer
 
 
 ###############################################################################
@@ -212,97 +211,34 @@ def unit_vec(phi):
     return (n_x, n_y, 0)
 
 
-def get_score_emb_unitary(phi, angle) -> List[torch.Tensor]:
-    """
-    Source: https://arxiv.org/pdf/2312.08426
-    """
-    unitaries = []
-    theta = math.pi - angle - math.asin(1/2 * math.sin(angle/2))
+def build_SU2_dataset(batch_size=10000) -> List[torch.Tensor]:
+    """Generate a batch of random SU(2) rotation vectors."""
 
-    unitaries.append(_rotation_unitary(unit_vec(phi + math.pi), theta))
-    unitaries.append(_rotation_unitary(unit_vec(phi), phi + 2 * theta))
-    unitaries.append(_rotation_unitary(unit_vec(phi + math.pi), theta))
+    theta = torch.rand(batch_size) * math.pi
+    phi = torch.rand(batch_size) * 2 * math.pi
+    alpha = torch.rand(batch_size) * 2 * math.pi
 
-    SCORE_tensor = torch.stack(unitaries)
-    target_unitary = _rotation_unitary(unit_vec(phi), angle)
+    # Rotation axis (spherical coordinates)
+    n_x = torch.sin(theta) * torch.cos(phi)
+    n_y = torch.sin(theta) * torch.sin(phi)
+    n_z = torch.cos(theta)
+    n = torch.stack([n_x, n_y, n_z], dim=1)  # (B, 3)
+    n = n / n.norm(dim=1, keepdim=True)
 
-    return SCORE_tensor, target_unitary
+    # Rotation vector for the function: (n_x, n_y, n_z, alpha)
+    rotation_vector = torch.cat([n, alpha.unsqueeze(1)], dim=1).to(torch.float)  # (B, 4)
 
-
-def build_score_emb_dataset(phi=0, M=100, random=False) -> List[torch.Tensor]:
-    dataset = []
-    if random:
-        angles = torch.randn(M) * math.pi
-    else:
-        dtheta = 1/M
-        angles = torch.arange(dtheta, 1 + dtheta, dtheta) * math.pi
-
-    for angle in angles:
-        unitaries = []
-        theta = math.pi - angle - math.asin(1/2 * math.sin(angle/2))
-
-        unitaries.append(_rotation_unitary(unit_vec(phi + math.pi), theta))
-        unitaries.append(_rotation_unitary(unit_vec(phi), phi + 2 * theta))
-        unitaries.append(_rotation_unitary(unit_vec(phi + math.pi), theta))
-
-        dataset.append(torch.stack(unitaries))
+    # Input unitaries
+    X = torch.tensor([[0, 1], [1, 0]], dtype=torch.complex64)
+    Y = torch.tensor([[0, -1j], [1j, 0]], dtype=torch.complex64)
+    Z = torch.tensor([[1, 0], [0, -1]], dtype=torch.complex64)
+    sigma_n = n[:, 0, None, None] * X + n[:, 1, None, None] * Y + n[:, 2, None, None] * Z  # (B, 2, 2)
+    alpha_half = alpha / 2
+    U_input = torch.matrix_exp(-1j * sigma_n * alpha_half[:, None, None])  # (B, 2, 2)
 
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    return rotation_vector, U_input
 
-    SCORE_tensors = torch.stack(dataset).to(device)
-
-    original_tensors = torch.stack([
-        _rotation_unitary(unit_vec(phi), angle)
-        for angle in angles
-    ]).to(device)
-
-    return SCORE_tensors, original_tensors
-
-
-def build_score4_emb_dataset(phi=0) -> List[torch.Tensor]:
-    angle_vec_dict = {
-        1/4 : [1.34820, 1.32669, 1.77042, 2.16800],
-        1/3 : [1.41901, 1.35864, 1.77664, 2.13759],
-        1/2 : [1.55280, 1.42267, 1.78586, 2.07559],
-        2/3 : [1.67478, 1.47865, 1.78919, 2.02043],
-        3/4 : [1.73053, 1.49972, 1.78853, 1.99939],
-        1   : [1.87342, 1.52524, 1.78436, 1.97330]
-    }
-
-    dataset = []
-
-    def unit_vec(phi):
-        n_x, n_y = math.cos(phi), math.sin(phi)
-        return (n_x, n_y, 0)
-
-    for angle in angle_vec_dict:
-        unitaries = []
-        center_angle = angle * math.pi
-        angle_vec = angle_vec_dict[angle]
-
-        for i, theta in enumerate(angle_vec):
-            unitaries.append(_rotation_unitary(unit_vec(phi + (i % 2) * math.pi), theta * math.pi))
-            center_angle += (-1)**(len(angle_vec) - 1 - i) * 2 * theta * math.pi
-        
-        unitaries.append(_rotation_unitary(unit_vec(phi), center_angle))
-
-        for i, theta in reversed(list(enumerate(angle_vec))):
-            unitaries.append(_rotation_unitary(unit_vec(phi + (i % 2) * math.pi), theta * math.pi))
-
-        dataset.append(torch.stack(unitaries))
-
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    SCORE_tensors = torch.stack(dataset).to(device)
-
-    original_tensors = torch.stack([
-        _rotation_unitary(unit_vec(phi), angle * math.pi)
-        for angle in angle_vec_dict
-    ]).to(device)
-
-    return SCORE_tensors, original_tensors
 
 
 ###############################################################################
@@ -336,7 +272,7 @@ def main():
 
     # Load model parameters from external JSON
     model_params = load_model_params("train/unitary_single_qubit_gate/model_params.json")
-    model = CompositePulseTransformerEncoder(**model_params)
+    model = UniversalQOCTransformer(**model_params)
 
     # load pretrained module
 
@@ -351,16 +287,12 @@ def main():
         "device": "cuda" if torch.cuda.is_available() else "cpu",
     }
 
-    trainer = CompositePulseTrainer(**trainer_params)
+    trainer = UniversalModelTrainer(**trainer_params)
 
-    if model_params["finetune"] is not None:
-        train_emb_set, train_target_set = build_score_emb_dataset(M=3000)
-        eval_emb_set, eval_target_set = build_score_emb_dataset(M=3000, random=True)
-        batch_size = 200
-    else:
-        train_emb_set, train_target_set = build_score4_emb_dataset()
-        eval_emb_set, eval_target_set = build_score4_emb_dataset()
-        batch_size = 1
+    
+    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000)
+    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000)
+    batch_size = 100
     
     #####################
     ## Training #########
@@ -371,10 +303,10 @@ def main():
     error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.65, 0.3)]
     
     trainer.train(
-        train_emb_set,
-        train_target_set,
-        eval_emb_set,
-        eval_target_set,
+        train_rotation_vec,
+        train_unitaries,
+        eval_rotation_vec,
+        eval_unitaries,
         error_params_list=error_params_list,
         epochs=args.num_epoch,
         save_path=args.save_path,

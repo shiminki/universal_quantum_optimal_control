@@ -59,6 +59,8 @@ class GRAPE(nn.Module):
             nn.ReLU(),
             nn.Linear(L, L, bias=False)
         )
+        # self.layer = nn.Linear(1, L, bias=False)
+
     def forward(self, U_target: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the GRAPE model.

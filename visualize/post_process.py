@@ -11,26 +11,24 @@ angle_list = ["0.25", "0.33", "0.50", "0.67", "0.75", "1.00"]
 
 pulse_dir = "figures/phase_control_1600_pulse_finetuned_iter2/pulse_param_csv/"
 
-save_path = "weights/1600_pulse_length_post_process_iter3"
+save_path = "weights/100/cleaned_pulses/"
 
 
 # List of input pulse CSV files
-input_files = [
-    os.path.join(pulse_dir, f"$R_X$({angle}$\pi$)_pulse.csv")
-    for angle in angle_list
-]
+# input_files = [
+#     os.path.join(pulse_dir, f"$R_X$({angle}$\pi$)_pulse.csv")
+#     for angle in angle_list
+# ]
+pulses = torch.load(pulse_dir)
 
 # Processing parameters
 slope_threshold = 0.7 # rad/unit
 
 # Process each file
-for infile in input_files:
-    # Read CSV without headers
-    df = pd.read_csv(infile, names=['phi', 'tau'])
-    
+for pulse in pulses:
     # Identify spikes based on slope
-    phi = df['phi'].values
-    tau = df['tau'].values
+    phi = pulse[:, 0].numpy()
+    tau = pulse[:, 1].numpy()
     slopes = (phi[1:] - phi[:-1]) / tau[1:]
     spike_idx = np.where(np.abs(slopes) > slope_threshold)[0][10:] + 1
     

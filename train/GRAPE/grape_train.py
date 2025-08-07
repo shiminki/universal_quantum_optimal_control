@@ -209,12 +209,12 @@ def _rotation_unitary(axis, theta) -> torch.Tensor:
 
 def build_dataset() -> torch.Tensor:
     axis_angles = [
-        ((1, 0, 0), torch.pi/4),
-        ((1, 0, 0), torch.pi/3),
+        # ((1, 0, 0), torch.pi/4),
+        # ((1, 0, 0), torch.pi/3),
         ((1, 0, 0), torch.pi/2),
-        ((1, 0, 0), torch.pi * 2 / 3),
-        ((1, 0, 0), torch.pi * 3 / 4),
-        ((1, 0, 0), torch.pi)
+        # ((1, 0, 0), torch.pi * 2 / 3),
+        # ((1, 0, 0), torch.pi * 3 / 4),
+        # ((1, 0, 0), torch.pi)
     ]
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -291,7 +291,8 @@ def main():
 
     # 5% PLE error'
     error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
-    
+    # error_params_list = [{"delta_std" : 1.0, "epsilon_std": 0.05}]
+
     trainer.train(
         train_emb_set,
         train_target_set,
@@ -306,5 +307,5 @@ def main():
 
 
 if __name__ == "__main__":
-    torch.manual_seed(0)
+    torch.manual_seed(42)
     main()
