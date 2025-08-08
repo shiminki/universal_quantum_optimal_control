@@ -138,7 +138,7 @@ class UniversalQOCTransformer(nn.Module):
             pulses = 0.2 * pulses + base_pulse
             
         pulses[:, :, -1] = F.relu(pulses[:, :, -1])
-        pulses[:, :, 0] += phi
+        pulses[:, :, 0] += phi.unsqueeze(1)
 
         return pulses
 
@@ -287,7 +287,7 @@ class UniversalQOCTransformer(nn.Module):
             return torch.cat(blocks, dim=0)  # (9,2,2)                           # (9,2,2)
 
         # vmap lifts the single-sample function to operate on the whole batch
-        return vmap(_single_sequence)(euler_angles)          # (B,9,2,2)
+        return vmap(_single_sequence)(euler_angles).to(euler_angles.device)          # (B,9,2,2)
                     # (B,9,2,2)
 
 
