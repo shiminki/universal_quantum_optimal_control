@@ -109,7 +109,7 @@ class UniversalQOCTransformer(nn.Module):
         score_flat = UniversalQOCTransformer._to_real_vector(score_sequence).to(torch.float)  # (B, 9, 2*2)
         
         # Project to d_model
-        emb = self.unitary_proj(score_flat)  # (B, d_model)
+        emb = self.unitary_proj(score_flat.to(rotation_vector.device))  # (B, d_model)
     
         pos_emb = UniversalQOCTransformer.sinusoidal_positional_encoding(L, D, device=emb.device)
 
@@ -344,3 +344,42 @@ class UniversalQOCTransformer(nn.Module):
 
         return pe  # (L, D)
 
+
+class Pipeline(nn.Module):
+    """
+    Pipeline for the UniversalQOCTransformer model.
+    This class is a wrapper around the UniversalQOCTransformer to provide a clean interface.
+    """
+
+    def __init__(
+            self, 
+            model: UniversalQOCTransformer,
+            weight_path: str = None, 
+            device: Optional[torch.device] = None
+        ) -> None:
+        super().__init__()
+        self.model = model
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        if weight_path is not None:
+            self.model.load_state_dict(torch.load(weight_path))
+        self.model.eval()  # Set the model to evaluation mode
+
+    def forward(self, rotation_vector: torch.Tensor) -> torch.Tensor:
+        self.model.eval()  # Ensure the model is in evaluation mode
+        return self.model(rotation_vector).detach()
+
+    def forward_with_unitary(self, unitary: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass with a batch of target unitaries.
+        unitary: (B, 2, 2) complex tensor
+        Returns: (B, ...) output from the model
+        """
+        self.model.eval()
+        # Extract rotation vector for each unitary in the batch
+        n_x = torch.real(unitary[:, 0, 1])
+        n_y = torch.imag(unitary[:, 0, 1])
+        n_z = torch.real(unitary[:, 1, 1])
+        theta = torch.acos(torch.real(unitary[:, 0, 0]).clamp(-1.0, 1.0))
+        rotation_vector = torch.stack([n_x, n_y, n_z, theta], dim=1)  # (B, 4)
+        return self.forward_with_rotation_vector(rotation_vector).detach()

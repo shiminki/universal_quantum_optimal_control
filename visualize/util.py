@@ -218,6 +218,8 @@ def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000,
     g = batched_unitary_generator
 
     U_out_plot = g(pulses_plot, errors_mc)
+
+    print(U_target_plot.shape, U_out_plot.shape, pulses_plot.shape)
     F = fidelity(U_out_plot, U_target_plot, 1)
 
 

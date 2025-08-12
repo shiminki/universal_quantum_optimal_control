@@ -16,3 +16,4 @@ demo/dump
 demo_outputs
 .gradio
 .devcontainer
+dcrab_best_params.npz
