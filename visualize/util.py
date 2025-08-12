@@ -35,7 +35,7 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
-from train.single_qubit.single_qubit_script import *
+from train.unitary_single_qubit_gate.universal_single_qubit_SCORE import *
 
 
 
@@ -218,6 +218,8 @@ def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000,
     g = batched_unitary_generator
 
     U_out_plot = g(pulses_plot, errors_mc)
+
+    print(U_target_plot.shape, U_out_plot.shape, pulses_plot.shape)
     F = fidelity(U_out_plot, U_target_plot, 1)
 
 
@@ -513,7 +515,7 @@ def animate_multi_error_bloch(
     # Create animation
     ani = FuncAnimation(fig, update, frames=num_frames, interval=50)
     # Save and close
-    ani.save(save_path, fps=30, dpi=150)
+    ani.save(save_path, fps=15, dpi=150)
     plt.close(fig)
 
 
