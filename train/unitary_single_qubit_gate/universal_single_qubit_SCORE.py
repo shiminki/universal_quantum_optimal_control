@@ -131,6 +131,7 @@ def batched_unitary_generator(
     # not yet natively supported in TorchScript; the overhead is negligible.)
     U_out = torch.eye(2, dtype=dtype, device=device).expand(B, 2, 2)
     # for k in range(L - 1, -1, -1):  # reverse order
+
     for k in range(L):
         U_out = U[:, k] @ U_out
 
@@ -211,12 +212,19 @@ def unit_vec(phi):
     return (n_x, n_y, 0)
 
 
-def build_SU2_dataset(batch_size=10000) -> List[torch.Tensor]:
+def build_SU2_dataset(batch_size=10000, random=False) -> List[torch.Tensor]:
     """Generate a batch of random SU(2) rotation vectors."""
 
-    theta = torch.rand(batch_size) * math.pi
-    phi = torch.rand(batch_size) * 2 * math.pi
-    alpha = torch.rand(batch_size) * 2 * math.pi
+    if not random:
+        B = int(math.sqrt(batch_size))  # batch size
+
+        theta = torch.linspace(0, math.pi, B)  # polar angle
+        alpha = torch.linspace(0, 2 * math.pi, B)  # azimuthal angle
+        phi = torch.rand(B ** 2) * 2 * math.pi
+    else:
+        theta = torch.rand(batch_size) * math.pi
+        alpha = torch.rand(batch_size) * 2 * math.pi
+        phi = torch.rand(batch_size) * 2 * math.pi
 
     # Rotation axis (spherical coordinates)
     n_x = torch.sin(theta) * torch.cos(phi)
@@ -291,8 +299,8 @@ def main():
 
     
     train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000)
-    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000)
-    batch_size = 100
+    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
+    batch_size = 50 # fits ~37GB GPU memory
     
     #####################
     ## Training #########

@@ -515,7 +515,7 @@ def animate_multi_error_bloch(
     # Create animation
     ani = FuncAnimation(fig, update, frames=num_frames, interval=50)
     # Save and close
-    ani.save(save_path, fps=30, dpi=150)
+    ani.save(save_path, fps=15, dpi=150)
     plt.close(fig)
 
 
