@@ -126,16 +126,25 @@ def batched_unitary_generator(
     # U_k = exp(-i H_k t_k)
     U = torch.linalg.matrix_exp(-1j * H * tau[..., None, None])  # (B, L, 2, 2)
 
-    # Left‑to‑right ordered product: U_L ⋯ U_1.
-    # (We keep the small Python loop – L ≤ 16 – because matmul reduction is
-    # not yet natively supported in TorchScript; the overhead is negligible.)
-    U_out = torch.eye(2, dtype=dtype, device=device).expand(B, 2, 2)
-    # for k in range(L - 1, -1, -1):  # reverse order
 
-    for k in range(L):
-        U_out = U[:, k] @ U_out
+    # U: (B, L, 2, 2)   want: U[:, L-1] @ ... @ U[:, 1] @ U[:, 0]
+    X = U
+    I = torch.eye(2, dtype=dtype, device=device).expand(B, 1, 2, 2)
+
+    while X.size(1) > 1:
+        # pad to even length
+        if (X.size(1) & 1) == 1:
+            X = torch.cat([X, I], dim=1)
+        # pairwise multiply preserving left-to-right order:
+        # (U1 @ U0), (U3 @ U2), ...
+        X = X[:, 1::2] @ X[:, 0::2]
+
+    U_out = X[:, 0]  # (B, 2, 2)
+
 
     return U_out
+
+
 
 
 ###############################################################################
@@ -196,15 +205,6 @@ def custom_loss(x, tau=0.99, k=100):
 
 
 
-def _rotation_unitary(axis, theta) -> torch.Tensor:
-    """Generate a Haar‑random SU(2) element via axis‑angle rotation."""
-    # normalize
-    if type(axis) is tuple:
-        axis = torch.tensor(axis, dtype=torch.float64)
-    axis /= axis.norm()
-    n_x, n_y, n_z = axis
-    H = 0.5 * theta * (n_x * _SIGMA_X_CPU + n_y * _SIGMA_Y_CPU + n_z * _SIGMA_Z_CPU)
-    return torch.matrix_exp(-1j * H)
 
 
 def unit_vec(phi):
@@ -218,8 +218,11 @@ def build_SU2_dataset(batch_size=10000, random=False) -> List[torch.Tensor]:
     if not random:
         B = int(math.sqrt(batch_size))  # batch size
 
-        theta = torch.linspace(0, math.pi, B)  # polar angle
-        alpha = torch.linspace(0, 2 * math.pi, B)  # azimuthal angle
+        theta_list = torch.linspace(0, math.pi, B)  # polar angle
+        alpha_list = torch.linspace(0, 2 * math.pi, B)  # azimuthal angle
+        theta, alpha = torch.meshgrid(theta_list, alpha_list, indexing='ij')
+        theta = theta.flatten()  # (B²,)
+        alpha = alpha.flatten()  # (B²,)
         phi = torch.rand(B ** 2) * 2 * math.pi
     else:
         theta = torch.rand(batch_size) * math.pi
@@ -300,7 +303,9 @@ def main():
     
     train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000)
     eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
-    batch_size = 50 # fits ~37GB GPU memory
+    batch_size = 200 # ~37GB for len 100 model
+    # batch_size = 50 # fits ~37GB GPU memory for len 400 model
+    
     
     #####################
     ## Training #########

@@ -8,7 +8,7 @@ matplotlib.use("Agg")
 sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
 
 # Local imports
-from train.unitary_single_qubit_gate.unitary_single_qubit_gate import (
+from train.unitary_single_qubit_gate.universal_single_qubit_SCORE import (
     load_model_params
 )
 from model.universal_model import UniversalQOCTransformer, Pipeline
@@ -85,7 +85,8 @@ def run_contour(model_option, x_, y_, z_, theta_raw):
     pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
     outdir = os.path.join("demo_outputs","contour")
     os.makedirs(outdir,exist_ok=True)
-    fidelity_contour_plot("tgt",U,pulse,model_option,outdir,phase_only=True)
+    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi"
+    fidelity_contour_plot(target_name,U,pulse,model_option,outdir,phase_only=True)
     imgs = sorted(glob.glob(os.path.join(outdir,"*.png")))
     return imgs
 
@@ -109,7 +110,8 @@ def run_fidelity(model_option, x_, y_, z_, theta_raw):
     pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
     outdir = os.path.join("demo_outputs","fidelity_std")
     os.makedirs(outdir,exist_ok=True)
-    plot_fidelity_by_std("tgt",U,pulse,model_option,outdir,phase_only=True)
+    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi"
+    plot_fidelity_by_std(target_name,U,pulse,model_option,outdir,phase_only=True)
     imgs = sorted(glob.glob(os.path.join(outdir,"*.png")))
     return imgs
 

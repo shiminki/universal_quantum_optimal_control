@@ -55,25 +55,25 @@ class GRAPE(nn.Module):
         # Initialize neural network parameters for pulse optimization
         L = self.pulse_length * 3
         self.layer = nn.Sequential(
-            nn.Linear(8, L, bias=False),
+            nn.Linear(4, L, bias=False),
             nn.ReLU(),
             nn.Linear(L, L, bias=False)
         )
         # self.layer = nn.Linear(1, L, bias=False)
 
-    def forward(self, U_target: torch.Tensor) -> torch.Tensor:
+    def forward(self, rotation_vector: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the GRAPE model.
 
         Args:
-            U_target: Input unitary tensor of shape (batch_size, d, d).
+            rotation_vector: shape (B, 4) – target rotation axis and angle in the form of (n_x, n_y, n_z, theta).
 
         Returns:
             Output tensor after applying the GRAPE model.
         """
         # Apply the GRAPE optimization logic here
-        B = U_target.shape[0]  # batch size
-        pulse_norm = self.layer(_to_real_vector(U_target))  # shape: (B, L * 3)
+        B = rotation_vector.shape[0]  # batch size
+        pulse_norm = self.layer(rotation_vector)  # shape: (B, L * 3)
         pulse_norm = pulse_norm.reshape(B, self.pulse_length, 3) # (B, L, 3)
 
         # Normalize the pulse parameters to their respective ranges

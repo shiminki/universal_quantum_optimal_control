@@ -1,6 +1,6 @@
-from model.model import CompositePulseTransformerEncoder
-from model.trainer import CompositePulseTrainer
-from train.unitary_single_qubit_gate.unitary_single_qubit_gate import *
+from model.universal_model import UniversalQOCTransformer
+from model.universal_model_trainer import UniversalModelTrainer
+from train.unitary_single_qubit_gate.universal_single_qubit_SCORE import *
 from model.universal_model import UniversalQOCTransformer
 import torch
 import numpy as np
@@ -19,7 +19,7 @@ model_param = {
     "max_pulses": 10,
 }
 
-model = CompositePulseTransformerEncoder(**model_param)
+model = UniversalQOCTransformer(**model_param)
 
 
 U_targets = torch.stack([

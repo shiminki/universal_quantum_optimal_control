@@ -35,7 +35,7 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
-from train.unitary_single_qubit_gate.unitary_single_qubit_gate import *
+from train.unitary_single_qubit_gate.universal_single_qubit_SCORE import *
 
 
 

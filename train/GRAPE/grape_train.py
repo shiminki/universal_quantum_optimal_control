@@ -42,7 +42,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 
 
 from model.GRAPE_model import GRAPE
-from model.trainer import CompositePulseTrainer
+from model.universal_model_trainer import UniversalModelTrainer
 
 
 ###############################################################################
@@ -196,39 +196,52 @@ def custom_loss(x, tau=0.99, k=100):
 
 
 
-def _rotation_unitary(axis, theta) -> torch.Tensor:
+def _rotation_unitary(rotation_vector) -> torch.Tensor:
     """Generate a Haar‑random SU(2) element via axis‑angle rotation."""
     # normalize
-    if type(axis) is tuple:
-        axis = torch.tensor(axis, dtype=torch.float64)
-    axis /= axis.norm()
-    n_x, n_y, n_z = axis
+    
+    n_x, n_y, n_z, theta = rotation_vector.unbind(dim=-1)  # each (B,)
     H = 0.5 * theta * (n_x * _SIGMA_X_CPU + n_y * _SIGMA_Y_CPU + n_z * _SIGMA_Z_CPU)
     return torch.matrix_exp(-1j * H)
 
 
-def build_dataset() -> torch.Tensor:
-    axis_angles = [
-        # ((1, 0, 0), torch.pi/4),
-        # ((1, 0, 0), torch.pi/3),
-        ((1, 0, 0), torch.pi/2),
-        # ((1, 0, 0), torch.pi * 2 / 3),
-        # ((1, 0, 0), torch.pi * 3 / 4),
-        # ((1, 0, 0), torch.pi)
-    ]
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+def build_SU2_dataset(batch_size=10000, random=False) -> List[torch.Tensor]:
+    """Generate a batch of random SU(2) rotation vectors."""
 
-    return torch.stack([
-        _rotation_unitary(axis, theta) 
-        for (axis, theta) in axis_angles
-    ], dim=0).unsqueeze(1).to(device)  # shape: (4, 1, 2, 2)
+    if not random:
+        B = int(math.sqrt(batch_size))  # batch size
+
+        theta_list = torch.linspace(0, math.pi, B)  # polar angle
+        alpha_list = torch.linspace(0, 2 * math.pi, B)  # azimuthal angle
+        theta, alpha = torch.meshgrid(theta_list, alpha_list, indexing='ij')
+        theta = theta.flatten()  # (B²,)
+        alpha = alpha.flatten()  # (B²,)
+        phi = torch.rand(B ** 2) * 2 * math.pi
+    else:
+        theta = torch.rand(batch_size) * math.pi
+        alpha = torch.rand(batch_size) * 2 * math.pi
+        phi = torch.rand(batch_size) * 2 * math.pi
+
+    # Rotation axis (spherical coordinates)
+    n_x = torch.sin(theta) * torch.cos(phi)
+    n_y = torch.sin(theta) * torch.sin(phi)
+    n_z = torch.cos(theta)
+    n = torch.stack([n_x, n_y, n_z], dim=1)  # (B, 3)
+    
+     # Rotation vector for the function: (n_x, n_y, n_z, alpha)
+    rotation_vector = torch.cat([n, alpha.unsqueeze(1)], dim=1).to(torch.float)  # (B, 4)
+    
+    # Input unitaries
+    X = torch.tensor([[0, 1], [1, 0]], dtype=torch.complex64)
+    Y = torch.tensor([[0, -1j], [1j, 0]], dtype=torch.complex64)
+    Z = torch.tensor([[1, 0], [0, -1]], dtype=torch.complex64)
+    sigma_n = n[:, 0, None, None] * X + n[:, 1, None, None] * Y + n[:, 2, None, None] * Z  # (B, 2, 2)
+    alpha_half = alpha / 2
+    U_input = torch.matrix_exp(-1j * sigma_n * alpha_half[:, None, None])  # (B, 2, 2)
 
 
-def unit_vec(phi):
-    n_x, n_y = math.cos(phi), math.sin(phi)
-    return (n_x, n_y, 0)
-
+    return rotation_vector, U_input
 
 
 ###############################################################################
@@ -277,12 +290,10 @@ def main():
         "device": "cuda" if torch.cuda.is_available() else "cpu",
     }
 
-    trainer = CompositePulseTrainer(**trainer_params)
+    trainer = UniversalModelTrainer(**trainer_params)
 
-    train_emb_set = build_dataset()  # shape: (4, 2, 2)
-    train_target_set = build_dataset()  # shape: (4, 2, 2)
-    eval_emb_set = build_dataset()  # shape: (4, 2, 2)
-    eval_target_set = build_dataset()  # shape: (4, 2,
+    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000)
+    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
     
     #####################
     ## Training #########
@@ -292,17 +303,18 @@ def main():
     # 5% PLE error'
     error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
     # error_params_list = [{"delta_std" : 1.0, "epsilon_std": 0.05}]
+    batch_size = 100
 
     trainer.train(
-        train_emb_set,
-        train_target_set,
-        eval_emb_set,
-        eval_target_set,
+        train_rotation_vec,
+        train_unitaries,
+        eval_rotation_vec,
+        eval_unitaries,
         error_params_list=error_params_list,
         epochs=args.num_epoch,
         save_path=args.save_path,
         plot=True,
-        batch_size=1
+        batch_size=batch_size
     )
 
 
