@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 
 from util import *
+from model.GRAPE_model import GRAPE
 
 
 #######################################################
@@ -55,16 +56,34 @@ def rotation_to_unitary(rotation_vector):
 from model.universal_model import UniversalQOCTransformer, Pipeline
 from train.unitary_single_qubit_gate.universal_single_qubit_SCORE import load_model_params
 
-weight_path = "weights/universal_gates/universal_score_len100_pretrain/err_{_delta_std_tensor(1.),_epsilon_std_0.05}.pt"
-model_config = load_model_params("train/unitary_single_qubit_gate/model_params.json")
+# model_option = "100 length"
+model_option = "400 length"
 
+if model_option == "100 length":
+    name = "transformer_len100"
+    path = "demo_universal/weight/length_100.pt"
+    params = load_model_params("demo_universal/params/length_100.json")
+elif model_option == "400 length":
+    name = "transformer_len400"
+    path = "demo_universal/weight/length_400.pt"
+    params = load_model_params("demo_universal/params/length_400.json")
+else: # GRAPE
+    name = "GRAPE"
+    path = "demo_universal/weight/grape.pt"
+    params = load_model_params("demo_universal/params/grape.json")
 
-pipeline = Pipeline(
-    UniversalQOCTransformer(**model_config),
-    weight_path = weight_path,
-    device="cpu"
-)
+if model_option in ["100 length", "400 length"]:
 
+    pipeline = Pipeline(
+        UniversalQOCTransformer(**params),
+        weight_path=path,
+        device="cpu"
+    )
+
+else: # GRAPE
+    pipeline = GRAPE(**params)
+    pipeline.load_state_dict(torch.load(path))
+    pipeline.eval()
 
 train_set_name = [
     "X_gate",
@@ -91,7 +110,7 @@ print(pulses.shape)
 phase_control_only = True
 PSI_INIT = torch.tensor([1.0, 0.0], dtype=torch.complex64)
 model_name = "UniversalQOCTransformer"
-save_dir = "figures/universal_gates/"
+save_dir = f"figures/universal_gates_{model_option}/"
 os.makedirs(save_dir, exist_ok=True)
 y_labels = [r"Phase (units of $\pi$)"]
 
