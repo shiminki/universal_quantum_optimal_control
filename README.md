@@ -8,34 +8,32 @@ This project develops a machine learning framework for generating composite puls
 
 ### Goal
 
-Implement a target quantum unitary $U_{\text{target}}$ using a pulse sequence $[p_1, p_2, ..., p_L] \in \mathcal{P}^L$, where the resulting unitary $U_{\text{out}}$ is robust against a static error $\vec{\epsilon} \sim p_{\vec{\epsilon}}(\cdot |\vec{\Sigma})$. The primary objective is to optimize composite pulse sequence for a **large** disorder.
+Implement a target quantum unitary $U_{\text{target}} \in SU(2)$ using an optimal phase control sequence $\phi_c(t)$, where the resulting unitary $U_{\text{out}}$ is robust against a static error $\vec{\epsilon} \sim p_{\vec{\epsilon}}(\cdot |\vec{\Sigma})$. The primary objective is to optimize composite pulse sequence for a **large** disorder.
 
 ### Problem Input:
 
-* Number of qubits $n$
-* Target unitary $U_{\text{target}} \in \mathbb{C}^{2^n \times 2^n}$
-* Pulse parameter space $\mathcal{P}$
+* Target unitary $U_{\text{target}} \in SU(2)$
 * Static error model $\vec{\epsilon} \sim p_{\vec{\epsilon}}(\cdot |\vec{\Sigma})$ where $\vec{\Sigma}$ quantifies the standard deviation.
 * Unitary generator $U_{\text{out}} \leftarrow g(p, \vec{\epsilon})$ that creates the unitary from pulse $p \in \mathcal{P}$ with error $\vec{\epsilon}$. 
 
 ### Problem Output:
 
-* Length L pulse sequence $p_1, ... p_L$.
+* Length L piecewise linear phase control $\phi_c(t) = [\phi_i, \tau_i]_{i = 1}^L$. Control hamiltonian is $H[\phi] = \frac{1}{2}[\cos\phi \cdot X + \sin\phi Y]$
 
 ### Objective:
 
 Maximize expected fidelity:
 
 ```math
-\mathbb{E}_{\vec{\epsilon} \sim p(\cdot |\vec{\Sigma})}\left[ \frac{\left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 + d}{d^2 + d}\right]
+\mathbb{E}_{\vec{\epsilon} \sim p(\cdot |\vec{\Sigma})}\left[ \frac{\left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 + 2}{6}\right]
 ```
 
 where 
 ```math
-U_{\text{out}} = U_L \cdots U_1 \text{ and } U_i = \text{unitary\_generator}(p_i, \vec{\epsilon})
+U_{\text{out}} = U_L \cdots U_1 \text{ and } U_i = \text{unitary\_generator}([\phi_i, \tau_i], \vec{\epsilon})
 ```
 
-A transformer encoder model $f(U_{\text{target}}; \theta)$ is trained to generate the pulse sequence.
+A transformer encoder model $f(U_{\text{target}}; \Theta)$ is trained to generate the pulse sequence.
 
 
 ### Optimization Code:
@@ -60,12 +58,6 @@ train(unitary_generator, error_distribution, U_target):
             - theta <- theta - eta * \partial_\theta loss_fn
 ```
 
-To generate smoother pulse sequence, we execute the following post-processing and finetuning:
-
-<p align="center">
-  <img src="assets/training pipeline.png"  alt="training pipeline">
-</p>
-
 ---
 
 ## 📁 Codebase Structure
@@ -76,10 +68,10 @@ This repository is organized into the following key directories:
 
 Contains the core machine learning logic for composite pulse sequence generation:
 
-* `model_encoder.py`: Defines the Transformer-based model architecture for generating pulse sequences.
-* `trainer.py`: Implements the training loop and optimization logic for model learning.
+* `universal_model.py`: Defines the Transformer-based model architecture for generating universal optimal control for SU(2) gate
+* `universaltrainer.py`: Implements the training loop and optimization logic for model learning.
 
-### `weights/`
+### `demo_universal/`
 
 Stores pretrained model weights and the optimized pulse sequences:
 
