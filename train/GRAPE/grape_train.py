@@ -299,8 +299,8 @@ def main():
     model_params = load_model_params("train/GRAPE/model_params.json")
 
     # CHOOSE MODEL
-    model = GRAPE_finetune_X_pi_2(**model_params)
-    # model = GRAPE(**model_params)
+    # model = GRAPE_finetune_X_pi_2(**model_params)
+    model = GRAPE(**model_params)
 
     # load pretrained module
 
