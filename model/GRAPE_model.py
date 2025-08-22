@@ -89,3 +89,108 @@ class GRAPE(nn.Module):
         pulses[:, :, -1] = F.relu(pulses[:, :, -1])
 
         return pulses
+
+
+class GRAPE_finetune_X_pi_2(nn.Module):
+    """
+    GRAPE (Gradient Ascent Pulse Engineering) model for quantum control.
+    This model is designed to optimize pulse sequences for quantum systems.
+    """
+
+    def __init__(
+            self, 
+            pulse_space: Dict[str, Tuple[float, float]], 
+            num_pulses: int,
+            device: torch.device = None
+        ):
+        super(GRAPE_finetune_X_pi_2, self).__init__()
+        self.param_names = list(pulse_space.keys())
+        self.param_ranges: torch.Tensor = torch.tensor(
+            [pulse_space[k] for k in self.param_names], dtype=torch.float32
+        )  # (P, 2)
+        
+        self.num_param = self.param_ranges.shape[0]
+
+        assert self.num_param == 2, "Only supports 2 parameters (phase and time) for now."
+
+        self.pulse_length = num_pulses
+
+        self.device = device
+        self.num_qubits = 1
+
+        if self.device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Initialize neural network parameters for pulse optimization
+        L = self.pulse_length * 3
+        self.layer = nn.Sequential(
+            nn.Linear(4, L, bias=False),
+            nn.ReLU(),
+            nn.Linear(L, L, bias=False)
+        )
+        # self.layer = nn.Linear(1, L, bias=False)
+
+
+        # ---- Base Pulse: SCORE4(X_pi_2) ----
+        angles = torch.tensor([1.55280, 1.42267, 1.78586, 2.07559]) * torch.pi
+        Angle = torch.pi / 2
+        base_pulse = []
+        n = num_pulses // 10
+
+        for i, angle in enumerate(angles):
+            Angle += (-1)**(len(angles) - i - 1) * 2 * angle
+
+            t = angle / n
+
+            phi = (i % 2) * torch.pi
+
+            for _ in range(n):
+                base_pulse.append([phi, t])
+    
+        for _ in range(n):
+            base_pulse.append([0, Angle / n])
+
+        for i, angle in reversed(list(enumerate(angles))):
+            t = angle / n
+
+            phi = (i % 2) * torch.pi
+
+            for _ in range(n):
+                base_pulse.append([phi, t])
+        
+        for _ in range(n):
+            base_pulse.append([0, 0])
+
+        self.base_pulse = torch.tensor(base_pulse, dtype=torch.float32).to(self.device) # (L, 2)
+        
+
+
+    def forward(self, rotation_vector: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the GRAPE model.
+
+        Args:
+            rotation_vector: shape (B, 4) – target rotation axis and angle in the form of (n_x, n_y, n_z, theta).
+
+        Returns:
+            Output tensor after applying the GRAPE model.
+        """
+        # Apply the GRAPE optimization logic here
+        B = rotation_vector.shape[0]  # batch size
+        pulse_norm = self.layer(rotation_vector)  # shape: (B, L * 3)
+        pulse_norm = pulse_norm.reshape(B, self.pulse_length, 3) # (B, L, 3)
+
+        # Normalize the pulse parameters to their respective ranges
+        pulse_norm = pulse_norm.sigmoid() # [ux, uy, tau] in (0, 1)
+        phi = torch.atan2(pulse_norm[:, :, 1], pulse_norm[:, :, 0])
+        tau = pulse_norm[:, :, 2]
+        pulses_unit = torch.stack((phi, tau), dim=-1) # shape: (B, L, 2
+        low = self.param_ranges[:, 0].to(pulses_unit.device)
+        high = self.param_ranges[:, 1].to(pulses_unit.device)
+
+        pulses = low + (high - low) * pulses_unit  # shape: (B, L, P)
+        pulses += self.base_pulse.unsqueeze(0)
+
+        pulses[:, :, -1] = F.relu(pulses[:, :, -1])
+
+        return pulses

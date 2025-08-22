@@ -41,7 +41,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
-from model.GRAPE_model import GRAPE
+from model.GRAPE_model import GRAPE, GRAPE_finetune_X_pi_2
 from model.universal_model_trainer import UniversalModelTrainer
 
 
@@ -127,13 +127,19 @@ def batched_unitary_generator(
     # U_k = exp(-i H_k t_k)
     U = torch.linalg.matrix_exp(-1j * H * tau[..., None, None])  # (B, L, 2, 2)
 
-    # Left‑to‑right ordered product: U_L ⋯ U_1.
-    # (We keep the small Python loop – L ≤ 16 – because matmul reduction is
-    # not yet natively supported in TorchScript; the overhead is negligible.)
-    U_out = torch.eye(2, dtype=dtype, device=device).expand(B, 2, 2)
-    # for k in range(L - 1, -1, -1):  # reverse order
-    for k in range(L):
-        U_out = U[:, k] @ U_out
+    X = U
+    I = torch.eye(2, dtype=dtype, device=device).expand(B, 1, 2, 2)
+
+    while X.size(1) > 1:
+        # pad to even length
+        if (X.size(1) & 1) == 1:
+            X = torch.cat([X, I], dim=1)
+        # pairwise multiply preserving left-to-right order:
+        # (U1 @ U0), (U3 @ U2), ...
+        X = X[:, 1::2] @ X[:, 0::2]
+
+    U_out = X[:, 0]  # (B, 2, 2)
+
 
     return U_out
 
@@ -195,17 +201,6 @@ def custom_loss(x, tau=0.99, k=100):
 ###############################################################################
 
 
-
-def _rotation_unitary(rotation_vector) -> torch.Tensor:
-    """Generate a Haar‑random SU(2) element via axis‑angle rotation."""
-    # normalize
-    
-    n_x, n_y, n_z, theta = rotation_vector.unbind(dim=-1)  # each (B,)
-    H = 0.5 * theta * (n_x * _SIGMA_X_CPU + n_y * _SIGMA_Y_CPU + n_z * _SIGMA_Z_CPU)
-    return torch.matrix_exp(-1j * H)
-
-
-
 def build_SU2_dataset(batch_size=10000, random=False) -> List[torch.Tensor]:
     """Generate a batch of random SU(2) rotation vectors."""
 
@@ -222,6 +217,33 @@ def build_SU2_dataset(batch_size=10000, random=False) -> List[torch.Tensor]:
         theta = torch.rand(batch_size) * math.pi
         alpha = torch.rand(batch_size) * 2 * math.pi
         phi = torch.rand(batch_size) * 2 * math.pi
+
+    # Rotation axis (spherical coordinates)
+    n_x = torch.sin(theta) * torch.cos(phi)
+    n_y = torch.sin(theta) * torch.sin(phi)
+    n_z = torch.cos(theta)
+    n = torch.stack([n_x, n_y, n_z], dim=1)  # (B, 3)
+    
+     # Rotation vector for the function: (n_x, n_y, n_z, alpha)
+    rotation_vector = torch.cat([n, alpha.unsqueeze(1)], dim=1).to(torch.float)  # (B, 4)
+    
+    # Input unitaries
+    X = torch.tensor([[0, 1], [1, 0]], dtype=torch.complex64)
+    Y = torch.tensor([[0, -1j], [1j, 0]], dtype=torch.complex64)
+    Z = torch.tensor([[1, 0], [0, -1]], dtype=torch.complex64)
+    sigma_n = n[:, 0, None, None] * X + n[:, 1, None, None] * Y + n[:, 2, None, None] * Z  # (B, 2, 2)
+    alpha_half = alpha / 2
+    U_input = torch.matrix_exp(-1j * sigma_n * alpha_half[:, None, None])  # (B, 2, 2)
+
+
+    return rotation_vector, U_input
+
+
+
+def build_X_pi_2_dataset(batch_size=10000) -> List[torch.Tensor]:
+    theta = torch.tensor([math.pi / 2] * batch_size) # polar angle
+    alpha = torch.tensor([0] * batch_size) # azimuthal angle
+    phi = torch.tensor([math.pi / 2] * batch_size) # pi/2 rotation
 
     # Rotation axis (spherical coordinates)
     n_x = torch.sin(theta) * torch.cos(phi)
@@ -275,7 +297,10 @@ def main():
 
     # Load model parameters from external JSON
     model_params = load_model_params("train/GRAPE/model_params.json")
-    model = GRAPE(**model_params)
+
+    # CHOOSE MODEL
+    model = GRAPE_finetune_X_pi_2(**model_params)
+    # model = GRAPE(**model_params)
 
     # load pretrained module
 
@@ -292,8 +317,13 @@ def main():
 
     trainer = UniversalModelTrainer(**trainer_params)
 
-    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000)
-    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
+    # train_rotation_vec, train_unitaries = build_X_pi_2_dataset(batch_size=10000)
+    # eval_rotation_vec, eval_unitaries = build_X_pi_2_dataset(batch_size=1000)
+
+
+    # FOR DEBUGGING
+    train_rotation_vec, train_unitaries = build_X_pi_2_dataset(batch_size=100)
+    eval_rotation_vec, eval_unitaries = build_X_pi_2_dataset(batch_size=100)
     
     #####################
     ## Training #########
@@ -303,7 +333,7 @@ def main():
     # 5% PLE error'
     error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
     # error_params_list = [{"delta_std" : 1.0, "epsilon_std": 0.05}]
-    batch_size = 100
+    batch_size = 20
 
     trainer.train(
         train_rotation_vec,

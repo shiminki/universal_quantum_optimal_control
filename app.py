@@ -123,7 +123,7 @@ def run_contour(model_option, x_, y_, z_, theta_raw):
     pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
     outdir = os.path.join("demo_outputs","contour")
     os.makedirs(outdir,exist_ok=True)
-    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi, {model_option}"
+    target_name = f"(axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi)"
     fidelity_contour_plot(target_name,U,pulse,model_option,outdir,phase_only=True)
     imgs = sorted(glob.glob(os.path.join(outdir, f"{target_name}.png")))
     return imgs

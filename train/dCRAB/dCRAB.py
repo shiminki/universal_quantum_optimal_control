@@ -129,7 +129,7 @@ if __name__ == '__main__':
     X, Y, Z = pauli_matrices()
     U_target = expm(-1j * (np.pi/2) * X / 2)
 
-    N = 2000
+    N = 10
 
     params, fid = dcrab_optimize(U_target,
                                  T=6.0,
@@ -137,8 +137,8 @@ if __name__ == '__main__':
                                  N_modes=N,
                                  rounds=5,
                                  samples=200,
-                                 w_min=0.1,
-                                 w_max=N * np.pi,
+                                 w_min=0,
+                                 w_max=2*N * np.pi,
                                  seed=42)
     print(f"Best fidelity: {fid:.6f}")
     # params is a tuple (optimized params array, omegas array)
