@@ -317,9 +317,8 @@ def main():
 
     trainer = UniversalModelTrainer(**trainer_params)
 
-    train_rotation_vec, train_unitaries = build_X_pi_2_dataset(batch_size=10000)
-    eval_rotation_vec, eval_unitaries = build_X_pi_2_dataset(batch_size=1000)
-
+    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000, random=True)
+    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
 
     # # FOR DEBUGGING
     # train_rotation_vec, train_unitaries = build_X_pi_2_dataset(batch_size=100)
