@@ -127,8 +127,8 @@ class GRAPE(nn.Module):
 
         base_pulse = base_pulse_expanded  # (B, self.pulse_length, 2)
 
-        # pulses = base_pulse + pulses  # shape: (B, L, 2)
-        pulses = base_pulse
+        pulses = base_pulse + pulses  # shape: (B, L, 2)
+        # pulses = base_pulse
 
         pulses[:, :, -1] = F.relu(pulses[:, :, -1])
 
@@ -154,11 +154,6 @@ class GRAPE(nn.Module):
 
         euler_angles = GRAPE.euler_yxy_from_rotation_vector(rotation_vector)  # (B, 3)
         score_sequence = GRAPE.score_sequence_from_yxy(euler_angles) # (B, L, 2, 2)
-
-
-        print("rotation_vector:", rotation_vector)
-        print("euler angles:", euler_angles)
-
         return score_sequence.to(rotation_vector.device, rotation_vector.dtype)  # (B, L, 2)
     
 
