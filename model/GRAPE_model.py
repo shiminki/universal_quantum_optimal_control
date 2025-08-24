@@ -88,7 +88,19 @@ class GRAPE(nn.Module):
 
         pulses = low + (high - low) * pulses_unit  # shape: (B, L, P)
 
-        base_pulse = GRAPE.get_base_pulse(rotation_vector)  # shape: (B, L, 2)
+
+        phi_input = torch.atan2(rotation_vector[:, 1], rotation_vector[:, 0])  # atan2(n_y, n_x)
+
+        # rotation_vector_rescaled: shape (B, 4) – target rotation axis and angle in the form of (n_xy, 0, n_z, theta).
+        rotation_vector_rescaled = torch.stack([
+            torch.sqrt(rotation_vector[:, 0] ** 2 + rotation_vector[:, 1] ** 2),  # n_xy
+            torch.zeros(B, device=rotation_vector.device),  # n_y
+            rotation_vector[:, 2],  # n_z
+            rotation_vector[:, 3]  # theta 
+        ], dim=1)
+
+
+        base_pulse = GRAPE.get_base_pulse(rotation_vector_rescaled)  # shape: (B, L, 2)
 
         # Reshape base_pulse to (B, self.pulse_length, 2)
         n = self.pulse_length // 9
@@ -98,7 +110,7 @@ class GRAPE(nn.Module):
         # Repeat each (phi, theta) n times, dividing theta by n
         expanded = []
         for i in range(9):
-            phi = base_pulse[:, i, 0]  # (B,)
+            phi = base_pulse[:, i, 0] + phi_input  # (B,)
             theta = base_pulse[:, i, 1]  # (B,)
             # Create (B, n, 2): repeat phi, theta/n n times
             block = torch.stack([
@@ -115,9 +127,8 @@ class GRAPE(nn.Module):
 
         base_pulse = base_pulse_expanded  # (B, self.pulse_length, 2)
 
-
-
-        pulses = base_pulse + pulses  # shape: (B, L, 2)
+        # pulses = base_pulse + pulses  # shape: (B, L, 2)
+        pulses = base_pulse
 
         pulses[:, :, -1] = F.relu(pulses[:, :, -1])
 
@@ -143,6 +154,10 @@ class GRAPE(nn.Module):
 
         euler_angles = GRAPE.euler_yxy_from_rotation_vector(rotation_vector)  # (B, 3)
         score_sequence = GRAPE.score_sequence_from_yxy(euler_angles) # (B, L, 2, 2)
+
+
+        print("rotation_vector:", rotation_vector)
+        print("euler angles:", euler_angles)
 
         return score_sequence.to(rotation_vector.device, rotation_vector.dtype)  # (B, L, 2)
     
@@ -194,7 +209,8 @@ class GRAPE(nn.Module):
             thetas = torch.stack([alpha, beta, gamma])  # Use stack instead of tensor()
 
             blocks = [
-                GRAPE.get_score_emb_pulse(phi, theta)
+                GRAPE.get_score_emb_pulse(phi, theta) if theta > 1e-6
+                else torch.zeros((3, 2), dtype=torch.complex128, device=angles.device)
                 for phi, theta in zip(phis, thetas)
             ]
             return torch.cat(blocks, dim=0)  # (9,2,2)                           # (9,2,2)

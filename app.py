@@ -102,10 +102,12 @@ def compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw):
         )
         pulse = pipeline(torch.tensor([n_x, n_y, n_z, theta], dtype=torch.float32).unsqueeze(0)).squeeze(0)
     else:
+        # grape = GRAPE(**params)
         grape = GRAPE(**params)
         grape.load_state_dict(torch.load(path, map_location="cpu"))
         pulse = grape(torch.tensor([n_x, n_y, n_z, theta], dtype=torch.float32).unsqueeze(0)).squeeze(0).detach()
 
+        print("pulse.shape", pulse.shape)
 
     return pulse, U_target
 
