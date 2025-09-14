@@ -190,6 +190,12 @@ class UniversalModelTrainer:
             drop_last=False
         )
 
+        # for i, x in enumerate(train_iter):
+        #     print(f"Train batch {i}: {x[0].shape}, {x[1].shape}")
+            
+        # for i, x in enumerate(eval_iter):
+        #     print(f"Eval batch {i}: {x[0].shape}, {x[1].shape}")
+
         #########################
 
         for error_params in error_params_list:
@@ -300,6 +306,7 @@ class UniversalModelTrainer:
     # ------------------------------------------------------------------
 
     def _save_weight(self, path: str | Path) -> None:
+        self.model.eval()
         if self.best_state is None:
             raise RuntimeError("No trained weights recorded – call .train() first.")
         Path(path).parent.mkdir(parents=True, exist_ok=True)

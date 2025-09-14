@@ -303,7 +303,7 @@ def main():
 
 
     train_size = 10000
-    eval_size = 1000
+    eval_size = 2000
     
     train_rotation_vec, train_unitaries = build_SU2_dataset(dataset_size=train_size, random=True)
     eval_rotation_vec, eval_unitaries = build_SU2_dataset(dataset_size=eval_size, random=True)
