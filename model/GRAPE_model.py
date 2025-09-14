@@ -203,9 +203,11 @@ class GRAPE(nn.Module):
             phis   = torch.tensor([0.0, math.pi / 2, 0.0], dtype=angles.dtype, device=angles.device)
             thetas = torch.stack([alpha, beta, gamma])  # Use stack instead of tensor()
 
+            device = angles.device
+
             blocks = [
-                GRAPE.get_score_emb_pulse(phi, theta) if theta > 1e-6
-                else torch.zeros((3, 2), dtype=torch.complex128, device=angles.device)
+                GRAPE.get_score_emb_pulse(phi, theta).to(device) if theta > 1e-6
+                else torch.zeros((3, 2), dtype=torch.complex128, device=device)
                 for phi, theta in zip(phis, thetas)
             ]
             return torch.cat(blocks, dim=0)  # (9,2,2)                           # (9,2,2)

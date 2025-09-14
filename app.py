@@ -10,7 +10,7 @@ from train.unitary_single_qubit_gate.universal_single_qubit_SCORE import (
     load_model_params
 )
 from model.universal_model import UniversalQOCTransformer, Pipeline
-from model.GRAPE_model import GRAPE
+from model.GRAPE_model import GRAPE, GRAPE_finetune_X_pi_2
 from visualize.util import (
     fidelity_contour_plot,
     plot_pulse_param,
@@ -86,7 +86,8 @@ def compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw):
     meta = MODEL_SELECTION[model_option]
     name = meta["name"]
     params = load_model_params(meta["params"])
-    path = _resolve_weight_path(model_option)  # <- from HF model repo
+    # path = _resolve_weight_path(model_option)  # <- from HF model repo
+    path = "demo_universal/weight/grape.pt"
     
     
     axis = np.array([x_, y_, z_]); axis = axis / np.linalg.norm(axis)
@@ -102,8 +103,8 @@ def compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw):
         )
         pulse = pipeline(torch.tensor([n_x, n_y, n_z, theta], dtype=torch.float32).unsqueeze(0)).squeeze(0)
     else:
+        grape = GRAPE_finetune_X_pi_2(**params)
         # grape = GRAPE(**params)
-        grape = GRAPE(**params)
         grape.load_state_dict(torch.load(path, map_location="cpu"))
         pulse = grape(torch.tensor([n_x, n_y, n_z, theta], dtype=torch.float32).unsqueeze(0)).squeeze(0).detach()
 
