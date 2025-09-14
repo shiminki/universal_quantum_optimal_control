@@ -278,6 +278,7 @@ def main():
     parser = argparse.ArgumentParser(description="Train composite pulse model")
     parser.add_argument("--num_epoch", type=int, default=1000, help="Number of training epochs")
     parser.add_argument("--save_path", type=str, default="weights/single_qubit_control/weights", help="Path to save model weights")
+    parser.add_argument("--delta_control", type=float, default=None, help="threshold for delta control; generate identity for |delta| < delta_control")
     args = parser.parse_args()
 
 
