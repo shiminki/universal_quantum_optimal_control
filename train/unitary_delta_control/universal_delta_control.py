@@ -212,22 +212,22 @@ def unit_vec(phi):
     return (n_x, n_y, 0)
 
 
-def build_SU2_dataset(batch_size=10000, random=False) -> List[torch.Tensor]:
+def build_SU2_dataset(dataset_size=10000, random=False) -> List[torch.Tensor]:
     """Generate a batch of random SU(2) rotation vectors."""
 
     if not random:
-        B = int(math.sqrt(batch_size))  # batch size
+        B = int(math.sqrt(dataset_size))  # batch size
 
         theta_list = torch.linspace(0, math.pi, B)  # polar angle
-        alpha_list = torch.linspace(0, 2 * math.pi, B)  # azimuthal angle
+        alpha_list = torch.linspace(0, 2 * math.pi, dataset_size // B)  # azimuthal angle
         theta, alpha = torch.meshgrid(theta_list, alpha_list, indexing='ij')
         theta = theta.flatten()  # (B²,)
         alpha = alpha.flatten()  # (B²,)
-        phi = torch.rand(B ** 2) * 2 * math.pi
+        phi = torch.rand(B * (dataset_size // B)) * 2 * math.pi
     else:
-        theta = torch.rand(batch_size) * math.pi
-        alpha = torch.rand(batch_size) * 2 * math.pi
-        phi = torch.rand(batch_size) * 2 * math.pi
+        theta = torch.rand(dataset_size) * math.pi
+        alpha = torch.rand(dataset_size) * 2 * math.pi
+        phi = torch.rand(dataset_size) * 2 * math.pi
 
     # Rotation axis (spherical coordinates)
     n_x = torch.sin(theta) * torch.cos(phi)
@@ -301,10 +301,14 @@ def main():
 
     trainer = UniversalModelTrainer(**trainer_params)
 
+
+    train_size = 10000
+    eval_size = 1000
     
-    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000, random=True)
-    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
-    batch_size = 200 # ~37GB for len 100 model
+    train_rotation_vec, train_unitaries = build_SU2_dataset(dataset_size=train_size, random=True)
+    eval_rotation_vec, eval_unitaries = build_SU2_dataset(dataset_size=eval_size, random=True)
+    batch_size = 400
+    # 200 fits ~37GB for len 100 model
     # batch_size = 50 # fits ~37GB GPU memory for len 400 model
     
     

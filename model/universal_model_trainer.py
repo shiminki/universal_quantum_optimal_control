@@ -173,14 +173,22 @@ class UniversalModelTrainer:
         # Universal gate version
         #########################
 
-        L_train = train_rotation_vec.shape[0]
-        L_eval = eval_rotation_vec.shape[0]
+        
+        # Train
+        train_iter = UniversalModelTrainer.aligned_batches(
+            batch_size,
+            train_rotation_vec,  # shape: (L_train, 4)
+            train_unitaries,     # shape: (L_train, 2, 2)
+            drop_last=False
+        )
 
-
-        train_rotation_batch = train_rotation_vec.view(L_train//batch_size,batch_size, 4)
-        train_target_batch = train_unitaries.view(L_train//batch_size, batch_size, 2, 2)
-        eval_rotation_batch = eval_rotation_vec.view(L_eval//batch_size, batch_size, 4)
-        eval_target_batch = eval_unitaries.view(L_eval//batch_size, batch_size, 2, 2)
+        # Eval
+        eval_iter = UniversalModelTrainer.aligned_batches(
+            batch_size,
+            eval_rotation_vec,   # shape: (L_eval, 4)
+            eval_unitaries,      # shape: (L_eval, 2, 2)
+            drop_last=False
+        )
 
         #########################
 
@@ -195,11 +203,11 @@ class UniversalModelTrainer:
                     train_loss_list = []
                     eval_fid_list = []
 
-                    for train_emb, train_target in zip(train_rotation_batch, train_target_batch):
+                    for train_emb, train_target in train_iter:
                         train_loss = self.train_epoch(train_emb, train_target, error_distribution) 
                         train_loss_list.append(train_loss)
 
-                    for eval_emb, eval_target in zip(eval_rotation_batch, eval_target_batch):
+                    for eval_emb, eval_target in eval_iter:
                         eval_fid = self.evaluate(eval_emb, eval_target, error_distribution)
                         eval_fid_list.append(eval_fid)
 
@@ -262,6 +270,28 @@ class UniversalModelTrainer:
         eval_fid = self.evaluate(train_set, error_distribution)
 
         return eval_fid
+    
+    # ------------------------------------------------------------------
+    # Utility: yield aligned slices from multiple tensors along dim 0
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def aligned_batches(batch_size, *tensors, drop_last=False):
+        """
+        Yields tuples (t1_batch, t2_batch, ...) where each batch
+        is a slice along dim 0. Last batch may be smaller unless drop_last=True.
+        """
+        assert len(tensors) >= 1
+        n = tensors[0].shape[0]
+        for t in tensors[1:]:
+            assert t.shape[0] == n, "All tensors must share the same length in dim 0."
+
+        for start in range(0, n, batch_size):
+            end = start + batch_size
+            if end > n and drop_last:
+                break
+            end = min(end, n)
+            yield tuple(t[start:end] for t in tensors)
 
         
 
