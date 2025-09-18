@@ -56,8 +56,8 @@ def rotation_to_unitary(rotation_vector):
 from model.universal_model import UniversalQOCTransformer, Pipeline
 from train.unitary_single_qubit_gate.universal_single_qubit_SCORE import load_model_params
 
-# model_option = "100 length"
-model_option = "400 length"
+model_option = "100 length"
+# model_option = "400 length"
 
 if model_option == "100 length":
     name = "transformer_len100"

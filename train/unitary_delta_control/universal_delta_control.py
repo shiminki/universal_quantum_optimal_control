@@ -225,9 +225,10 @@ def build_SU2_dataset(dataset_size=10000, random=False) -> List[torch.Tensor]:
         alpha = alpha.flatten()  # (B²,)
         phi = torch.rand(B * (dataset_size // B)) * 2 * math.pi
     else:
-        theta = torch.rand(dataset_size) * math.pi
-        alpha = torch.rand(dataset_size) * 2 * math.pi
-        phi = torch.rand(dataset_size) * 2 * math.pi
+        eps = 1e-3
+        theta = torch.rand(dataset_size) * math.pi + eps * torch.randn(dataset_size)
+        alpha = torch.rand(dataset_size) * 2 * math.pi + eps * torch.randn(dataset_size)
+        phi = torch.rand(dataset_size) * 2 * math.pi + eps * torch.randn(dataset_size)
 
     # Rotation axis (spherical coordinates)
     n_x = torch.sin(theta) * torch.cos(phi)
@@ -297,6 +298,7 @@ def main():
         "fidelity_fn": fidelity,
         "loss_fn": sharp_loss,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "delta_control": args.delta_control
     }
 
     trainer = UniversalModelTrainer(**trainer_params)
