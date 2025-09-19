@@ -143,7 +143,6 @@ class UniversalQOCTransformer(nn.Module):
         pulses[:, :, -1] = F.relu(pulses[:, :, -1])
         
         pulses[:, :, 0] += phi.unsqueeze(1) # phase control
-
         pulses[:, :, 0] = (pulses[:, :, 0] + math.pi) % (2 * math.pi) - math.pi
 
         return pulses

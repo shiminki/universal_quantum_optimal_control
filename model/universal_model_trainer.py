@@ -31,7 +31,8 @@ class UniversalModelTrainer:
         fidelity_fn: Callable[[torch.Tensor, torch.Tensor, int], torch.Tensor],
         loss_fn: Callable[[torch.Tensor, torch.Tensor, Callable, int], torch.Tensor] | None = None,
         optimizer: Optional[torch.optim.Optimizer] = None,
-        monte_carlo: int = 1000,
+        monte_carlo: int = 1024,
+        mc_chunk: int = 32,
         device: str = "cuda",
         delta_control: float=None
     ) -> None:
@@ -42,6 +43,7 @@ class UniversalModelTrainer:
         self.fidelity_fn = fidelity_fn
         self.loss_fn = loss_fn 
         self.monte_carlo = monte_carlo
+        self.mc_chunk = mc_chunk
         self.device = device
         self.delta_control = delta_control
 
@@ -73,44 +75,54 @@ class UniversalModelTrainer:
         U_emb = U_emb_batch.to(self.device)
         U_target = U_target_batch.to(self.device)
 
-        # Forward pass once to obtain pulse parameters
-        pulses = self.model(U_emb)  # (B, L, P)
 
         # ──────────────────────────────────────────────────────────────
         # Vectorised Monte‑Carlo sampling
         # ──────────────────────────────────────────────────────────────
-        pulses_mc = pulses.repeat_interleave(self.monte_carlo, dim=0)   # (Bm, L, P)
-        error = error_distribution(self.monte_carlo * U_target.shape[0]).to(self.device) # (Bm, …)
-
-        # TODO: set target == identity if |delta - delta_0| > threshold
-        targets_mc = U_target.repeat_interleave(self.monte_carlo, dim=0)  # (Bm, d, d)
-
-        if self.delta_control is not None:
-            delta = error[0]  # (Bm,)
-            # Build mask: which samples should become identity
-            threshold = self.delta_control
-
-            mask = delta.abs() > threshold  # (Bm,)
-
-            # Batch identity with correct dtype/device
-            I = torch.eye(U_target.size(-1), dtype=U_target.dtype, device=U_target.device)\
-                .unsqueeze(0).expand_as(targets_mc)  # (Bm, d, d)
-
-            # Replace where needed (keeps grads for unmasked entries)
-            targets_mc = torch.where(mask.view(-1, 1, 1), I, targets_mc)
 
 
-        U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)
+        rep = self.monte_carlo // self.mc_chunk
 
-        # print(U_out.shape, targets_mc.shape)
+        total_loss = 0
 
-        loss = self.loss_fn(U_out, targets_mc, self.fidelity_fn, self.model.num_qubits)
+        for _ in range(rep):
+             # Forward pass once to obtain pulse parameters
+            pulses = self.model(U_emb)  # (B, L, P)
 
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-        self.optimizer.step()
+            pulses_mc = pulses.repeat_interleave(self.mc_chunk, dim=0)   # (Bm, L, P)
+            error = error_distribution(self.mc_chunk * U_target.shape[0]).to(self.device) # (Bm, …)
 
-        return float(loss.detach().item())
+            # TODO: set target == identity if |delta - delta_0| > threshold
+            targets_mc = U_target.repeat_interleave(self.mc_chunk, dim=0)  # (Bm, d, d)
+
+            if self.delta_control is not None:
+                delta = error[0]  # (Bm,)
+                # Build mask: which samples should become identity
+                threshold = self.delta_control
+
+                mask = delta.abs() > threshold  # (Bm,)
+
+                # Batch identity with correct dtype/device
+                I = torch.eye(U_target.size(-1), dtype=U_target.dtype, device=U_target.device)\
+                    .unsqueeze(0).expand_as(targets_mc)  # (Bm, d, d)
+
+                # Replace where needed (keeps grads for unmasked entries)
+                targets_mc = torch.where(mask.view(-1, 1, 1), I, targets_mc)
+
+
+            U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)
+
+            # print(U_out.shape, targets_mc.shape)
+
+            loss = self.loss_fn(U_out, targets_mc, self.fidelity_fn, self.model.num_qubits)
+
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            self.optimizer.step()
+
+            total_loss += loss.detach().item()
+
+        return total_loss / rep
     
    
     # ------------------------------------------------------------------
@@ -124,20 +136,47 @@ class UniversalModelTrainer:
 
         U_emb = U_emb_batch.to(self.device)
         U_target = U_target_batch.to(self.device)
-        pulses = self.model(U_emb)
+        
         
         # ──────────────────────────────────────────────────────────────
         # Vectorised Monte‑Carlo sampling
         # ──────────────────────────────────────────────────────────────
-        pulses_mc = pulses.repeat_interleave(self.monte_carlo, dim=0)   # (Bm, L, P)
-        targets_mc = U_target.repeat_interleave(self.monte_carlo, dim=0)  # (Bm, d, d)
-        error = error_distribution(self.monte_carlo * U_target.shape[0]).to(self.device)                   # (Bm, …)
+        
+        rep = self.monte_carlo // self.mc_chunk
 
-        U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)
+        fidelities = []
+
+        for _ in range(rep):
+            pulses = self.model(U_emb)
+            
+            pulses_mc = pulses.repeat_interleave(self.mc_chunk, dim=0)   # (Bm, L, P)
+            error = error_distribution(self.mc_chunk * U_target.shape[0]).to(self.device) # (Bm, …)
+
+            # TODO: set target == identity if |delta - delta_0| > threshold
+            targets_mc = U_target.repeat_interleave(self.mc_chunk, dim=0)  # (Bm, d, d)
+
+            if self.delta_control is not None:
+                delta = error[0]  # (Bm,)
+                # Build mask: which samples should become identity
+                threshold = self.delta_control
+
+                mask = delta.abs() > threshold  # (Bm,)
+
+                # Batch identity with correct dtype/device
+                I = torch.eye(U_target.size(-1), dtype=U_target.dtype, device=U_target.device)\
+                    .unsqueeze(0).expand_as(targets_mc)  # (Bm, d, d)
+
+                # Replace where needed (keeps grads for unmasked entries)
+                targets_mc = torch.where(mask.view(-1, 1, 1), I, targets_mc)
 
 
-        mean_fid = self.fidelity_fn(U_out, targets_mc, self.model.num_qubits).mean().item()
-        return mean_fid
+            U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)
+
+            # print(U_out.shape, targets_mc.shape)
+            mean_fid = self.fidelity_fn(U_out, targets_mc, self.model.num_qubits).mean().item()
+            fidelities.append(mean_fid)
+
+        return np.mean(fidelities)
 
     # ------------------------------------------------------------------
     # Error helper

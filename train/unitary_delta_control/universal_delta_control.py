@@ -69,6 +69,16 @@ def _get_paulis(device: torch.device) -> torch.Tensor:
         ).to(device)
     return _PAULI_CACHE[device]
 
+
+_ZZ_CACHE = {}
+def _zz(device, dtype):
+    key = (device, dtype)
+    if key not in _ZZ_CACHE:
+        pauli = _get_paulis(device).type(dtype)
+        _ZZ_CACHE[key] = torch.kron(pauli[3], pauli[3]).to(device).type(dtype).contiguous()
+    return _ZZ_CACHE[key]
+
+
 ###############################################################################
 # Batched propagator for a composite‑pulse sequence
 ###############################################################################
@@ -139,7 +149,7 @@ def batched_unitary_generator(
     H_sys = build_single_hamiltonian(omega_sys, phi_sys, delta_sys, epsilon)
     H_anc = build_single_hamiltonian(omega_anc, phi_anc, delta_anc, epsilon)
 
-    H_int = 0.5 * (1 + coupling_error[..., None, None, None]) * (J * torch.kron(pauli[3], pauli[3]))  # (4, 4)
+    H_int = 0.5 * (1 + coupling_error[..., None, None, None]) * (J * _zz(device, dtype))  # (4, 4)
     H_int = H_int.to(device).type(dtype)  # (1,1,4,4)
 
     H = torch.kron(H_sys, _I2_CPU.to(device)) + torch.kron(_I2_CPU.to(device), H_anc) + H_int  # (B, L, 4, 4)
@@ -199,12 +209,12 @@ def fidelity(U_out: torch.Tensor, U_target: torch.Tensor, num_qubits: int=1) -> 
     Computation
     -----------
     We can define fidelity to be
-    F := max_{W \in SU(2)} 1/16 * |Tr[(U_target^\dagger (x) W^\dagger) * U_out]|^2
+    F := max_{W \\in SU(2)} 1/16 * |Tr[(U_target^\\dagger (x) W^\\dagger) * U_out]|^2
 
-    Let U_eff = (U_target^\dagger (x) I) * U_out] and X = Tr_1[U_eff]
-    SVF of X is X = U diag(s1, s2) V^\dagger
+    Let U_eff = (U_target^\\dagger (x) I) * U_out] and X = Tr_1[U_eff]
+    SVF of X is X = U diag(s1, s2) V^\\dagger
 
-    Notice that the trace is maximized when W = U V^\dagger. 
+    Notice that the trace is maximized when W = U V^\\dagger. 
 
     Hence F = 1/16 * (s1 + s2)^2, and the average fidelity is
 
@@ -259,11 +269,15 @@ def infidelity_loss(U_out, U_target, fidelity_fn, num_qubits):
 
 
 def sharp_loss(U_out, U_target, fidelity_fn, num_qubits, tau=0.99, k=100):
-    F = torch.mean(fidelity_fn(U_out, U_target))
-    return custom_loss(F, tau, k)
+    # F: (B,) per-sample fidelity
+    F = fidelity_fn(U_out, U_target, num_qubits=num_qubits)
+    # per-sample smooth hinge, then mean
+    return custom_loss(F, tau, k).mean()
 
 def custom_loss(x, tau=0.99, k=100):
-    return torch.log(1 + torch.exp(-k * (x - tau))) * (1 - x)
+    # x can be a scalar or a tensor; elementwise is fine
+    return torch.log1p(torch.exp(-k * (x - tau))) * (1 - x)
+
 
 
 
@@ -334,6 +348,12 @@ def load_model_params(json_path: str) -> dict:
     if "pulse_space" in params:
         for k, v in params["pulse_space"].items():
             params["pulse_space"][k] = tuple(v)
+
+    param_names = list(params['pulse_space'].keys())
+
+    print(f"pulse_names: {param_names}")
+    print(f"First element: {param_names[0]}")
+
 
     return params
 

@@ -267,6 +267,8 @@ def load_model_params(json_path: str) -> dict:
         for k, v in params["pulse_space"].items():
             params["pulse_space"][k] = tuple(v)
 
+    print(f"Parameters: {list(params.keys())}")
+
     return params
 
 
