@@ -247,7 +247,7 @@ def fidelity(U_out: torch.Tensor, U_target: torch.Tensor, num_qubits: int=1) -> 
 
     F = (nuc_norm ** 2) / 16
 
-    return (4 * F.real + 1) / 5
+    return (2 * F.real + 1) / 3
 
 
 def negative_log_loss(U_out, U_target, fidelity_fn, num_qubits):
