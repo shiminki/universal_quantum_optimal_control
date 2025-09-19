@@ -152,53 +152,60 @@ def build_SCORE_pulses(SCORE_emb=False):
 
 
 def plot_pulse_param(file_path, title, y_labels, df):
-    # Extract pulse lengths (last column)
-    x = df.iloc[:, len(y_labels)]
+    # --- Extract columns per your mapping ---
+    phi = df.iloc[:, 0].to_numpy(dtype=float)   # radians
+    tau = df.iloc[:, 1].to_numpy(dtype=float)   # durations
 
-    # 1×2 grid: histogram (1 share) vs params (3 shares), with a bit more wspace
+    # Precompute edges in units of pi for plotting
+    t_edges = np.concatenate(([0.0], np.cumsum(tau / math.pi)))  # length N+1
+
+    # Controls
+    u_x = np.cos(phi)
+    u_y = np.sin(phi)
+
+    # 1×2 layout: left = histogram, right = stacked u_x / u_y
     fig, (ax_hist, ax_params) = plt.subplots(
         nrows=1, ncols=2,
         figsize=(14, 6),
         gridspec_kw={'width_ratios': [1, 3], 'wspace': 0.4}
     )
 
-    # --- Left: histogram ---
-    ax_hist.hist(x / math.pi, bins=20, edgecolor='black')
+    # --- Left: histogram of pulse durations (in units of pi) ---
+    ax_hist.hist(tau / math.pi, bins=20, edgecolor='black')
     ax_hist.set_xlabel(r"Pulse Time (units of $\pi$)")
     ax_hist.set_ylabel("Count")
     ax_hist.set_title("Pulse Length Histogram")
 
-    # --- Right: parameter stack ---
-    if len(y_labels) == 1:
-        axes = [ax_params]
-    else:
-        # remove the single placeholder and insert a vertical stack
-        fig.delaxes(ax_params)
-        axes = fig.add_gridspec(
-            nrows=len(y_labels), ncols=1,
-            left=0.40, right=0.98,  # you can also nudge these if needed
-            top=0.90, bottom=0.10,
-            hspace=0.3
-        ).subplots()
+    # --- Right: stacked u_x and u_y ---
+    fig.delaxes(ax_params)  # replace the placeholder with a 2-row stack
+    axes = fig.add_gridspec(
+        nrows=2, ncols=1,
+        left=0.40, right=0.98,
+        top=0.90, bottom=0.10,
+        hspace=0.3
+    ).subplots(sharex=True)
 
-    cumulative = np.concatenate(([0], np.cumsum(x / math.pi)))
-    for i, ax in enumerate(axes):
-        if i == len(axes) - 1:
-            ax.step(cumulative[1:], df.iloc[:, i] / math.pi, where='post')
-            ax.set_xlabel("Rotation time (units of π)")
-        else:
-            ax.step(cumulative[1:], df.iloc[:, i], where='post')
-        ax.set_ylabel(y_labels[i])
-        ax.grid(True)
-        
+    # Plot as step functions that are constant over each segment tau_k
+    # Use 'post' with N+1 x-points and y extended by last value for clean edges
+    axes[0].step(t_edges, np.r_[u_x, u_x[-1]], where='post')
+    axes[0].set_ylabel(r"$u_x(t)=\cos\phi$")
+    axes[0].grid(True)
+    axes[0].set_ylim(-1.1, 1.1)
 
-    fig.suptitle(f"Composite Pulse for {title}", fontsize=16)
+    axes[1].step(t_edges, np.r_[u_y, u_y[-1]], where='post')
+    axes[1].set_ylabel(r"$u_y(t)=\sin\phi$")
+    axes[1].grid(True)
+    axes[1].set_ylim(-1.1, 1.1)
+    axes[1].set_xlabel(r"Rotation time (units of $\pi$)")
 
+    # --- Title & save ---
+    fig.suptitle(f"Optimal Control for {title}", fontsize=16)
     os.makedirs(file_path, exist_ok=True)
     out_path = os.path.join(file_path, f"{title}.png")
     plt.tight_layout(rect=[0, 0, 1, 0.94])
     plt.savefig(out_path)
     plt.close(fig)
+
 
 
 #############################

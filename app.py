@@ -4,14 +4,13 @@ import sys, os, glob, math, numpy as np, pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 
-# Add parent directory to PYTHONPATH
-sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
 
 # Local imports
 from train.unitary_single_qubit_gate.universal_single_qubit_SCORE import (
     load_model_params
 )
 from model.universal_model import UniversalQOCTransformer, Pipeline
+from model.GRAPE_model import GRAPE, GRAPE_finetune_X_pi_2
 from visualize.util import (
     fidelity_contour_plot,
     plot_pulse_param,
@@ -25,6 +24,41 @@ _SIGMA_X_CPU = torch.tensor([[0.0, 1.0], [1.0, 0.0]], dtype=torch.cfloat)
 _SIGMA_Y_CPU = torch.tensor([[0.0, -1.0j], [1.0j, 0.0]], dtype=torch.cfloat)
 _SIGMA_Z_CPU = torch.tensor([[1.0, 0.0], [0.0, -1.0]], dtype=torch.cfloat)
 pauli = [_I2_CPU, _SIGMA_X_CPU, _SIGMA_Y_CPU, _SIGMA_Z_CPU]
+
+
+from huggingface_hub import hf_hub_download  # pip install huggingface_hub
+
+WEIGHTS_REPO = os.getenv("WEIGHTS_REPO", "shiminki/universal_qoc_weights")
+
+MODEL_SELECTION = {
+    "100 length": {
+        "name": "transformer_len100",
+        "filename": "length_100.pt",
+        "params": "demo_universal/params/length_100.json",
+        "type": "transformer",
+    },
+    "400 length": {
+        "name": "transformer_len400",
+        "filename": "length_400.pt",
+        "params": "demo_universal/params/length_400.json",
+        "type": "transformer",
+    },
+    "GRAPE": {
+        "name": "GRAPE",
+        "filename": "grape.pt",
+        "params": "demo_universal/params/grape.json",
+        "type": "grape",
+    },
+}
+
+def _resolve_weight_path(model_option, revision=None):
+    meta = MODEL_SELECTION[model_option]
+    return hf_hub_download(
+        repo_id=WEIGHTS_REPO,
+        filename=meta["filename"],
+        revision=revision,               # Optional: pin a specific commit/tag for reproducibility
+    )
+
 
 
 # Convert spinor to Bloch vector
@@ -45,30 +79,37 @@ def generate_unitary(pulse, delta, epsilon):
     H = (H_base + delta * pauli[3])
     return torch.linalg.matrix_exp(-1j * H * tau * (1 + epsilon))
 
+name = "initial"
 
 # Core compute: returns pulse tensor and target unitary
 def compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw):
-    # Model params
-    if model_option == "100 length":
-        name = "transformer_len100"
-        path = "demo_universal/weight/length_100.pt"
-        params = load_model_params("demo_universal/params/length_100.json")
-    else:
-        name = "transformer_len400"
-        path = "demo_universal/weight/length_400.pt"
-        params = load_model_params("demo_universal/params/length_400.json")
+    meta = MODEL_SELECTION[model_option]
+    name = meta["name"]
+    params = load_model_params(meta["params"])
+    # path = _resolve_weight_path(model_option)  # <- from HF model repo
+    path = "demo_universal/weight/grape.pt"
+    
+    
     axis = np.array([x_, y_, z_]); axis = axis / np.linalg.norm(axis)
     n_x, n_y, n_z = axis; theta = math.pi * theta_raw
     H = 0.5 * theta * (n_x*_SIGMA_X_CPU + n_y*_SIGMA_Y_CPU + n_z*_SIGMA_Z_CPU)
     U_target = torch.matrix_exp(-1j * H)
 
-    pipeline = Pipeline(
-        UniversalQOCTransformer(**params),
-        weight_path=path,
-        device="cpu"
-    )
 
-    pulse = pipeline(torch.tensor([n_x, n_y, n_z, theta], dtype=torch.float32).unsqueeze(0)).squeeze(0)
+    if meta["type"] == "transformer":
+        pipeline = Pipeline(
+            UniversalQOCTransformer(**params),
+            weight_path=path,
+        )
+        pulse = pipeline(torch.tensor([n_x, n_y, n_z, theta], dtype=torch.float32).unsqueeze(0)).squeeze(0)
+    else:
+        grape = GRAPE_finetune_X_pi_2(**params)
+        # grape = GRAPE(**params)
+        grape.load_state_dict(torch.load(path, map_location="cpu"))
+        pulse = grape(torch.tensor([n_x, n_y, n_z, theta], dtype=torch.float32).unsqueeze(0)).squeeze(0).detach()
+
+        print("pulse.shape", pulse.shape)
+
     return pulse, U_target
 
 # 1. Compute pulse and CSV
@@ -85,14 +126,14 @@ def run_contour(model_option, x_, y_, z_, theta_raw):
     pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
     outdir = os.path.join("demo_outputs","contour")
     os.makedirs(outdir,exist_ok=True)
-    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi"
+    target_name = f"(axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi)"
     fidelity_contour_plot(target_name,U,pulse,model_option,outdir,phase_only=True)
-    imgs = sorted(glob.glob(os.path.join(outdir,"*.png")))
+    imgs = sorted(glob.glob(os.path.join(outdir, f"{target_name}.png")))
     return imgs
 
 # 3. Pulse param plot
 def run_paramplot(model_option, x_, y_, z_, theta_raw,):
-    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi"
+    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi, {model_option}"
 
     pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
     df = pd.DataFrame(pulse.numpy())
@@ -102,7 +143,7 @@ def run_paramplot(model_option, x_, y_, z_, theta_raw,):
         outdir, target_name, ["Phase (units of pi)"], df
     )
 
-    imgs = sorted(glob.glob(os.path.join(outdir,"*.png")))
+    imgs = glob.glob(os.path.join(outdir, f"{target_name}.png"))
     return imgs
 
 # 4. Fidelity vs std
@@ -110,9 +151,12 @@ def run_fidelity(model_option, x_, y_, z_, theta_raw):
     pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
     outdir = os.path.join("demo_outputs","fidelity_std")
     os.makedirs(outdir,exist_ok=True)
-    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi"
-    plot_fidelity_by_std(target_name,U,pulse,model_option,outdir,phase_only=True)
-    imgs = sorted(glob.glob(os.path.join(outdir,"*.png")))
+    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi, {model_option}"
+
+    if not os.path.exists(os.path.join(outdir, f"{target_name}_fidelity.png")):
+        plot_fidelity_by_std(target_name,U,pulse,model_option,outdir,phase_only=True)
+    imgs = sorted(glob.glob(os.path.join(outdir, f"{target_name}*")))
+    
     return imgs
 
 # 5. Evolution video
@@ -121,64 +165,71 @@ def run_evolution(model_option, x_, y_, z_, theta_raw):
 
     df = pd.DataFrame(pulse.numpy(), columns=["phi", "tau"])
 
-    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi"
-    
-    M = 11
-    errors = get_ore_ple_error_distribution(batch_size=M)
-    deltas, epsilons = errors[0], errors[1]
-    # # uniform dist
-    # deltas = np.random.random(M) * 2 - 1
-    deltas = [-1 + 0.2 * i for i in range(M)]
-
-    bloch_list, pulse_info_list, fidelity_list = [], [], []
-
-    # target state
-    PSI_INIT = torch.tensor([1, 0], dtype=torch.cfloat)
-    target_psi = U_target @ PSI_INIT
-
-    # for eps in epsilons:
-    #     for delt in deltas:
-    for eps, delt in zip(epsilons, deltas):
-        # simulate
-        psi = PSI_INIT
-        bv, pi = [], []
-        # tau = 0
-        for p in df.itertuples():
-            g = generate_unitary
-            U = g(p, delta=delt, epsilon=eps)
-            psi = U @ psi
-            bv.append(spinor_to_bloch(psi))
-            
-            # tau += p[2]
-            pi.append((0, p[1], p[2]))
-            
-
-        bloch_list.append(np.vstack(([spinor_to_bloch(PSI_INIT)], bv)))
-        pulse_info_list.append(pi)
-        fidelity_list.append(np.abs(torch.vdot(target_psi, psi))**2)
-    
-
+    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi, {model_option}"
     outdir=os.path.join("demo_outputs","evolution"); os.makedirs(outdir,exist_ok=True)
-    vid=os.path.join(outdir,"evolution.mp4")
-
     os.makedirs(outdir, exist_ok=True)
-    animate_multi_error_bloch(
-        bloch_list, pulse_info_list, fidelity_list,
-        deltas, epsilons,
-        name=f"Ensemble Evolution of {target_name}",
-        save_path=vid,
-        phase_only=True
-    )
+    vid=os.path.join(outdir, f"{target_name}_evolution.mp4")
+
+    if not os.path.exists(vid):
+        M = 11
+        errors = get_ore_ple_error_distribution(batch_size=M)
+        deltas, epsilons = errors[0], errors[1]
+        # # uniform dist
+        # deltas = np.random.random(M) * 2 - 1
+        deltas = [-1 + 0.2 * i for i in range(M)]
+
+        bloch_list, pulse_info_list, fidelity_list = [], [], []
+
+        # target state
+        PSI_INIT = torch.tensor([1, 0], dtype=torch.cfloat)
+        target_psi = U_target @ PSI_INIT
+
+        # for eps in epsilons:
+        #     for delt in deltas:
+        for eps, delt in zip(epsilons, deltas):
+            # simulate
+            psi = PSI_INIT
+            bv, pi = [], []
+            # tau = 0
+            for p in df.itertuples():
+                g = generate_unitary
+                U = g(p, delta=delt, epsilon=eps)
+                psi = U @ psi
+                bv.append(spinor_to_bloch(psi))
+                
+                # tau += p[2]
+                pi.append((0, p[1], p[2]))
+                
+
+            bloch_list.append(np.vstack(([spinor_to_bloch(PSI_INIT)], bv)))
+            pulse_info_list.append(pi)
+            fidelity_list.append(np.abs(torch.vdot(target_psi, psi))**2)
+    
+        animate_multi_error_bloch(
+            bloch_list, pulse_info_list, fidelity_list,
+            deltas, epsilons,
+            name=f"Ensemble Evolution of {target_name}",
+            save_path=vid,
+            phase_only=True
+        )
 
     return vid, [vid]
+
+def _predownload_all(revision=None):
+    for key in MODEL_SELECTION:
+        _ = _resolve_weight_path(key, revision=revision)
+
+
 
 # Build Gradio UI
 with gr.Blocks() as demo:
     gr.Markdown("## Composite Pulse for Universal Gates")
+    demo.load(lambda: _predownload_all(), outputs=[])
+    
     with gr.Row():
         c1,c2 = gr.Column(scale=1), gr.Column(scale=2)
     with c1:
-        model = gr.Dropdown(["100 length","400 length"],value="100 length",label="Model")
+        model = gr.Dropdown(["100 length","400 length", "GRAPE"],value="100 length",label="Model")
         x_in=gr.Number(1.0,label="x-component"); y_in=gr.Number(0.0,label="y-component"); z_in=gr.Number(0.0,label="z-component")
         th=gr.Slider(0.0,2.0,value=0.5,step=0.01,label="Theta (π units)")
         btn1=gr.Button("Compute Parameters")

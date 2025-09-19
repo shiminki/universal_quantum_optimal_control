@@ -8,7 +8,9 @@ This project develops a machine learning framework for generating composite puls
 
 ### Goal
 
+
 Implement a target quantum unitary $U_{\text{target}} \in SU(2)$ using an optimal phase control sequence $\phi_c(t)$, where the resulting unitary $U_{\text{out}}$ is robust against a static error $\vec{\epsilon} \sim p_{\vec{\epsilon}}(\cdot |\vec{\Sigma})$. The primary objective is to optimize composite pulse sequence for a **large** disorder.
+
 
 ### Problem Input:
 
@@ -126,6 +128,13 @@ python train/single_qubit_phase_only/single_qubit_phase_control.py --num_epoch [
 $$L(F; \tau=0.99, k=100) = \log(1 + \exp(-k \cdot (F - \tau))\cdot (1 - F)$$
 
 ---
+
+
+---
+models:
+  - shiminki/universal_qoc_weights
+---
+
 
 ## 📄 License
 

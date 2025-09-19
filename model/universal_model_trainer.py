@@ -33,6 +33,7 @@ class UniversalModelTrainer:
         optimizer: Optional[torch.optim.Optimizer] = None,
         monte_carlo: int = 1000,
         device: str = "cuda",
+        delta_control: float=None
     ) -> None:
         print(f"Total parameter: {sum(p.numel() for p in model.parameters())}")
         self.model = model.to(device)
@@ -42,6 +43,7 @@ class UniversalModelTrainer:
         self.loss_fn = loss_fn 
         self.monte_carlo = monte_carlo
         self.device = device
+        self.delta_control = delta_control
 
         self.optimizer = optimizer or torch.optim.Adam(self.model.parameters(), lr=3e-5)
 
@@ -78,8 +80,25 @@ class UniversalModelTrainer:
         # Vectorised Monte‑Carlo sampling
         # ──────────────────────────────────────────────────────────────
         pulses_mc = pulses.repeat_interleave(self.monte_carlo, dim=0)   # (Bm, L, P)
+        error = error_distribution(self.monte_carlo * U_target.shape[0]).to(self.device) # (Bm, …)
+
+        # TODO: set target == identity if |delta - delta_0| > threshold
         targets_mc = U_target.repeat_interleave(self.monte_carlo, dim=0)  # (Bm, d, d)
-        error = error_distribution(self.monte_carlo * U_target.shape[0]).to(self.device)                   # (Bm, …)
+
+        if self.delta_control is not None:
+            delta = error[0]  # (Bm,)
+            # Build mask: which samples should become identity
+            threshold = self.delta_control
+
+            mask = delta.abs() > threshold  # (Bm,)
+
+            # Batch identity with correct dtype/device
+            I = torch.eye(U_target.size(-1), dtype=U_target.dtype, device=U_target.device)\
+                .unsqueeze(0).expand_as(targets_mc)  # (Bm, d, d)
+
+            # Replace where needed (keeps grads for unmasked entries)
+            targets_mc = torch.where(mask.view(-1, 1, 1), I, targets_mc)
+
 
         U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)
 
@@ -156,12 +175,17 @@ class UniversalModelTrainer:
 
         L_train = train_rotation_vec.shape[0]
         L_eval = eval_rotation_vec.shape[0]
-
-
+        
         train_rotation_batch = train_rotation_vec.view(L_train//batch_size,batch_size, 4)
         train_target_batch = train_unitaries.view(L_train//batch_size, batch_size, 2, 2)
         eval_rotation_batch = eval_rotation_vec.view(L_eval//batch_size, batch_size, 4)
         eval_target_batch = eval_unitaries.view(L_eval//batch_size, batch_size, 2, 2)
+
+        # for i, x in enumerate(train_iter):
+        #     print(f"Train batch {i}: {x[0].shape}, {x[1].shape}")
+            
+        # for i, x in enumerate(eval_iter):
+        #     print(f"Eval batch {i}: {x[0].shape}, {x[1].shape}")
 
         #########################
 
@@ -243,14 +267,14 @@ class UniversalModelTrainer:
         eval_fid = self.evaluate(train_set, error_distribution)
 
         return eval_fid
-
-        
+ 
 
     # ------------------------------------------------------------------
     # Persistence helpers
     # ------------------------------------------------------------------
 
     def _save_weight(self, path: str | Path) -> None:
+        self.model.eval()
         if self.best_state is None:
             raise RuntimeError("No trained weights recorded – call .train() first.")
         Path(path).parent.mkdir(parents=True, exist_ok=True)

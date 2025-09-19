@@ -9,3 +9,5 @@ qutip
 ffmpeg
 gradio
 ffmpeg-python
+imageio
+imageio-ffmpeg
