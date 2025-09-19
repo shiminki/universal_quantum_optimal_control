@@ -76,6 +76,9 @@ class UniversalQOCTransformer(nn.Module):
         self.finetune = finetune
 
 
+        print(f"Model initialized with {self.param_dim} control parameters of length {self.max_pulses}")
+
+
     # ------------------------------------------------------------------
     # Forward
     # ------------------------------------------------------------------
@@ -138,7 +141,8 @@ class UniversalQOCTransformer(nn.Module):
             pulses = 0.2 * pulses + base_pulse
             
         pulses[:, :, -1] = F.relu(pulses[:, :, -1])
-        pulses[:, :, 0] += phi.unsqueeze(1)
+        
+        pulses[:, :, 0] += phi.unsqueeze(1) # phase control
 
         pulses[:, :, 0] = (pulses[:, :, 0] + math.pi) % (2 * math.pi) - math.pi
 

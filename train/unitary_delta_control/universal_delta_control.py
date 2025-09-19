@@ -77,16 +77,17 @@ def _get_paulis(device: torch.device) -> torch.Tensor:
 def batched_unitary_generator(
     pulses: torch.Tensor,
     error: torch.Tensor,
+    J: float = 0.1,
 ) -> torch.Tensor:
     """Compose the total unitary for a **batch** of composite sequences.
 
     Parameters
     ----------
     pulses : torch.Tensor
-        Shape ``(B, L, 2)``, where each pulse is
-        ``[Δ, Ω, φ, t]`` (detuning, Rabi amplitude, phase, duration).
+        Shape ``(B, L, 5)``, where each pulse is
+        ``[Ω_sys, φ_sys, Ω_anc, φ_anc, t]`` (detuning, Rabi amplitude, phase, duration).
     error : torch.Tensor
-        Shape ``(2, B,)`` static off‑resonant detuning and pulse length error for each
+        Shape ``(4, B,)`` static off‑resonant detuning of system and ancila, and pulse length error for each
         batch element.  If you fuse Monte‑Carlo repeats into the batch, just
         expand ``delta`` accordingly.
 
@@ -96,51 +97,61 @@ def batched_unitary_generator(
         Shape ``(B, 2, 2)`` complex64/128 – the composite unitary ``U_L ⋯ U_1``.
     """
 
-    if pulses.ndim != 3 or pulses.shape[-1] != 2:
-        raise ValueError("'pulses' must have shape (B, L, 2)")
+    if pulses.ndim != 3 or pulses.shape[-1] != 5:
+        raise ValueError(f"'pulses' must have shape (B, L, 5). Input pusle has shape {pulses.shape}")
+    
+    if error.ndim != 2 or error.shape[0] != 4:
+        raise ValueError("'error' must have shape (4, B)")
 
     B, L, _ = pulses.shape
     device = pulses.device
     dtype = torch.cfloat
 
     # Unpack and reshape to broadcast with Pauli matrices.
-    phi, tau = pulses.unbind(dim=-1)  # each (B, L)
+    phi_sys, omega_sys, phi_anc, omega_anc, tau = pulses.unbind(dim=-1)  # each (B, L)
 
     # (4, 2, 2) on correct device
     pauli = _get_paulis(device).type(dtype)
 
     # ORE and PLE
-    delta = error[0]
-    epsilon = error[1]
+    delta_sys = error[0]
+    delta_anc = error[1]
+    epsilon = error[2]
+    coupling_error = error[3]
+
+
+    def build_single_hamiltonian(omega, phi, delta, epsilon):
+        H_base = omega[..., None, None] * (
+            torch.cos(phi)[..., None, None] * pauli[1]
+            + torch.sin(phi)[..., None, None] * pauli[2]
+        )
+        H = H_base + delta[..., None, None, None] * pauli[3]
+        H = 0.5 * H * (1 + epsilon[..., None, None, None])
+
+        return H
 
     # Build base Hamiltonian H₀ for every pulse in parallel.
-    H_base = (
-        torch.cos(phi)[..., None, None] * pauli[1]
-        + torch.sin(phi)[..., None, None] * pauli[2]
+    H_sys = omega_sys[..., None, None] * (
+        torch.cos(phi_sys)[..., None, None] * pauli[1]
+        + torch.sin(phi_sys)[..., None, None] * pauli[2]
     )
     
-    H = H_base + delta[..., None, None, None] * pauli[3]
+    H_sys = build_single_hamiltonian(omega_sys, phi_sys, delta_sys, epsilon)
+    H_anc = build_single_hamiltonian(omega_anc, phi_anc, delta_anc, epsilon)
 
-    H = 0.5 * H * (1 + epsilon[..., None, None, None])
+    H_int = 0.5 * (1 + coupling_error[..., None, None, None]) * (J * torch.kron(pauli[3], pauli[3]))  # (4, 4)
+    H_int = H_int.to(device).type(dtype)  # (1,1,4,4)
+
+    H = torch.kron(H_sys, _I2_CPU.to(device)) + torch.kron(_I2_CPU.to(device), H_anc) + H_int  # (B, L, 4, 4)
 
     # U_k = exp(-i H_k t_k)
-    U = torch.linalg.matrix_exp(-1j * H * tau[..., None, None])  # (B, L, 2, 2)
+    U = torch.linalg.matrix_exp(-1j * H * tau[..., None, None])  # (B, L, 4, 4)
 
+    # U: (B, L, 4, 4)   want: U[:, L-1] @ ... @ U[:, 1] @ U[:, 0]
+    U_out = torch.eye(4, dtype=dtype, device=device).expand(B, 4, 4)
 
-    # U: (B, L, 2, 2)   want: U[:, L-1] @ ... @ U[:, 1] @ U[:, 0]
-    X = U
-    I = torch.eye(2, dtype=dtype, device=device).expand(B, 1, 2, 2)
-
-    while X.size(1) > 1:
-        # pad to even length
-        if (X.size(1) & 1) == 1:
-            X = torch.cat([X, I], dim=1)
-        # pairwise multiply preserving left-to-right order:
-        # (U1 @ U0), (U3 @ U2), ...
-        X = X[:, 1::2] @ X[:, 0::2]
-
-    U_out = X[:, 0]  # (B, 2, 2)
-
+    for k in range(L - 1, -1, -1):
+        U_out = U[:, k] @ U_out
 
     return U_out
 
@@ -155,32 +166,89 @@ def get_ore_error_distribution(batch_size:int, delta_std: float = 1.0) -> torch.
     return torch.randn(batch_size) * delta_std
 
 
-def get_ore_ple_error_distribution(batch_size:int, delta_std: float = 1.0, epsilon_std: float=0.05) -> torch.tensor:
-    ore_error = torch.randn(batch_size) * delta_std
+def get_error_distribution(batch_size:int, delta_std: float = 1.0, epsilon_std: float=0.05, coupling_std: float=0.1) -> torch.tensor:
+    ore_sys_error = torch.randn(batch_size) * delta_std
+    ore_anc_error = torch.randn(batch_size) * delta_std
     ple_error = torch.randn(batch_size) * epsilon_std
-    return torch.stack([ore_error, ple_error])
+    coupling_error = torch.randn(batch_size) * coupling_std
+    return torch.stack(
+        [ore_sys_error, ore_anc_error, ple_error, coupling_error]
+    )
 
 ###############################################################################
 # Loss and fidelity functions
 ###############################################################################
 
 
-def fidelity(U_out: torch.Tensor, U_target: torch.Tensor, num_qubits: int) -> torch.Tensor:
-    """Entanglement fidelity F = (|Tr(U_out^† U_target)|² + d) / d(d + 1)."""
-    # trace over last two dims, keep batch
-    # Batched conjugate transpose and matrix multiplication
-    U_out_dagger = U_out.conj().transpose(-1, -2)  # [batch, 2, 2]
-    product = U_out_dagger @ U_target  # [batch, 2, 2]
+def fidelity(U_out: torch.Tensor, U_target: torch.Tensor, num_qubits: int=1) -> torch.Tensor:
+    """
+    Returns fidelity such that U_out is effectively a product state U_target (x) SU(2)
 
-    # print(product, product.shape)
+    Parameters
+    ----------
+    U_out : torch.Tensor
+        Shape (B, 4, 4) unitary generated by the model. This unitary acts on both system and ancilla qubit
+    U_target : torch.Tensor
+        Shape (B, 2, 2) unitary, which is the desired unitary gate on the system qubit
+    Returns
+    -------
+    torch.Tensor
+        Shape ``(B,)`` fidelity of each gate
 
-    # Batched trace calculation
-    trace = torch.einsum('bii->b', product)  # [batch]
-    trace_squared = torch.abs(trace) ** 2
+    -----------
+    Computation
+    -----------
+    We can define fidelity to be
+    F := max_{W \in SU(2)} 1/16 * |Tr[(U_target^\dagger (x) W^\dagger) * U_out]|^2
 
-    d = 2 ** num_qubits
+    Let U_eff = (U_target^\dagger (x) I) * U_out] and X = Tr_1[U_eff]
+    SVF of X is X = U diag(s1, s2) V^\dagger
 
-    return (trace_squared + d) / (d * (d + 1))
+    Notice that the trace is maximized when W = U V^\dagger. 
+
+    Hence F = 1/16 * (s1 + s2)^2, and the average fidelity is
+
+    F_avg = (4 * F + 1)/5
+    """
+    assert U_out.shape[1] == U_out.shape[2] == 4, f"U_out is not a 4x4 unitary. Shape: {U_out.shape}"
+    assert U_target.shape[1] == U_target.shape[2] == 2, f"U_target is not a 2x2 unitary. Shape: {U_target.shape}"
+    assert U_out.shape[0] == U_target.shape[0], f"U_out and U_target not matching in length: {U_out.shape[0]} != {U_target.shape[0]}"
+
+    device = U_out.device
+    dtype = U_out.dtype
+    B = U_out.shape[0]
+    I2 = torch.eye(2, dtype=dtype, device=device).expand(B, 2, 2)
+
+    U_t_dag = U_target.conj().transpose(-2, -1)
+
+    # Extract 2x2 blocks of U_out
+    A = U_out[:, 0:2, 0:2]  # (B,2,2)
+    B = U_out[:, 0:2, 2:4]
+    C = U_out[:, 2:4, 0:2]
+    D = U_out[:, 2:4, 2:4]
+
+    # Entries of U_t_dag, shaped for broadcast with 2x2 blocks
+    a = U_t_dag[:, 0, 0].unsqueeze(-1).unsqueeze(-1)  # (B,1,1)
+    b = U_t_dag[:, 0, 1].unsqueeze(-1).unsqueeze(-1)
+    c = U_t_dag[:, 1, 0].unsqueeze(-1).unsqueeze(-1)
+    d = U_t_dag[:, 1, 1].unsqueeze(-1).unsqueeze(-1)
+
+    # U_t_dag (x) I is [[aI, bI], [cI, dI]]
+
+    # X = block00 + block11 of (U_t_dag ⊗ I) U_out, derived directly:
+    # block00 = a*A + b*C, block11 = c*B + d*D
+    X = a * A + b * C + c * B + d * D  # (B,2,2)
+
+    # Singular values of each X
+    S = torch.linalg.svdvals(X)  # (B, 2)
+
+    # Nuclear norm = sum of singular values
+    nuc_norm = S.sum(dim=-1)  # (B,)
+
+    F = (nuc_norm ** 2) / 16
+
+    return (4 * F.real + 1) / 5
+
 
 def negative_log_loss(U_out, U_target, fidelity_fn, num_qubits):
     return -torch.log(torch.mean(fidelity_fn(U_out, U_target, num_qubits)))
@@ -191,7 +259,7 @@ def infidelity_loss(U_out, U_target, fidelity_fn, num_qubits):
 
 
 def sharp_loss(U_out, U_target, fidelity_fn, num_qubits, tau=0.99, k=100):
-    F = torch.mean(fidelity_fn(U_out, U_target, num_qubits))
+    F = torch.mean(fidelity_fn(U_out, U_target))
     return custom_loss(F, tau, k)
 
 def custom_loss(x, tau=0.99, k=100):
@@ -225,10 +293,10 @@ def build_SU2_dataset(dataset_size=10000, random=False) -> List[torch.Tensor]:
         alpha = alpha.flatten()  # (B²,)
         phi = torch.rand(B * (dataset_size // B)) * 2 * math.pi
     else:
-        eps = 1e-3
-        theta = torch.rand(dataset_size) * math.pi + eps * torch.randn(dataset_size)
-        alpha = torch.rand(dataset_size) * 2 * math.pi + eps * torch.randn(dataset_size)
-        phi = torch.rand(dataset_size) * 2 * math.pi + eps * torch.randn(dataset_size)
+        eps = 1e-2
+        theta = torch.rand(dataset_size) * math.pi * (1 + eps)
+        alpha = torch.rand(dataset_size) * 2 * math.pi * (1 + eps)
+        phi = torch.rand(dataset_size) * 2 * math.pi * (1 + eps)
 
     # Rotation axis (spherical coordinates)
     n_x = torch.sin(theta) * torch.cos(phi)
@@ -279,12 +347,14 @@ def main():
     parser = argparse.ArgumentParser(description="Train composite pulse model")
     parser.add_argument("--num_epoch", type=int, default=1000, help="Number of training epochs")
     parser.add_argument("--save_path", type=str, default="weights/single_qubit_control/weights", help="Path to save model weights")
-    parser.add_argument("--delta_control", type=float, default=None, help="threshold for delta control; generate identity for |delta| < delta_control")
+    parser.add_argument("--delta_control", type=float, default=0.5, help="threshold for delta control; generate identity for |delta| < delta_control")
     args = parser.parse_args()
 
 
     # Load model parameters from external JSON
-    model_params = load_model_params("train/unitary_single_qubit_gate/model_params.json")
+    current_directory = os.path.dirname(__file__)
+    print(current_directory)
+    model_params = load_model_params(f"{current_directory}/model_params.json")
     model = UniversalQOCTransformer(**model_params)
 
     # load pretrained module
@@ -294,7 +364,7 @@ def main():
 
     trainer_params = {
         "model" : model, "unitary_generator" : batched_unitary_generator,
-        "error_sampler": get_ore_ple_error_distribution,
+        "error_sampler": get_error_distribution,
         "fidelity_fn": fidelity,
         "loss_fn": sharp_loss,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -304,12 +374,19 @@ def main():
     trainer = UniversalModelTrainer(**trainer_params)
 
 
-    train_size = 10000
-    eval_size = 2000
+    # train
+    train_size = 12000
+    eval_size = 3000
+    batch_size = 300
+
+    # # debugging
+    # train_size = 24
+    # eval_size = 6
+    # batch_size = 2
     
     train_rotation_vec, train_unitaries = build_SU2_dataset(dataset_size=train_size, random=True)
     eval_rotation_vec, eval_unitaries = build_SU2_dataset(dataset_size=eval_size, random=True)
-    batch_size = 400
+    
     # 200 fits ~37GB for len 100 model
     # batch_size = 50 # fits ~37GB GPU memory for len 400 model
     

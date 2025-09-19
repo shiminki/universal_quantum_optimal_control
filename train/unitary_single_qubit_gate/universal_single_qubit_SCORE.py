@@ -225,9 +225,10 @@ def build_SU2_dataset(batch_size=10000, random=False) -> List[torch.Tensor]:
         alpha = alpha.flatten()  # (B²,)
         phi = torch.rand(B ** 2) * 2 * math.pi
     else:
-        theta = torch.rand(batch_size) * math.pi
-        alpha = torch.rand(batch_size) * 2 * math.pi
-        phi = torch.rand(batch_size) * 2 * math.pi
+        eps = 1e-2
+        theta = torch.rand(batch_size) * math.pi * (1 + eps)
+        alpha = torch.rand(batch_size) * 2 * math.pi * (1 + eps)
+        phi = torch.rand(batch_size) * 2 * math.pi * (1 + eps)
 
     # Rotation axis (spherical coordinates)
     n_x = torch.sin(theta) * torch.cos(phi)
@@ -282,7 +283,8 @@ def main():
 
 
     # Load model parameters from external JSON
-    model_params = load_model_params("train/unitary_single_qubit_gate/model_params.json")
+    current_directory = os.path.dirname(__file__)
+    model_params = load_model_params(f"{current_directory}/model_params.json")  
     model = UniversalQOCTransformer(**model_params)
 
     # load pretrained module

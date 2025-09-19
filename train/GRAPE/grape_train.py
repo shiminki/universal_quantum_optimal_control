@@ -296,7 +296,8 @@ def main():
 
 
     # Load model parameters from external JSON
-    model_params = load_model_params("train/GRAPE/model_params.json")
+    current_directory = os.path.dirname(__file__)
+    model_params = load_model_params(f"{current_directory}/model_params.json")
 
     # CHOOSE MODEL
     # model = GRAPE_finetune_X_pi_2(**model_params)

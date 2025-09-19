@@ -1,7 +1,10 @@
 {
   "num_qubits": 1,
   "pulse_space": {
-    "phi": [-3.15, 3.15],
+    "phi_sys": [-3.15, 3.15],
+    "omega_sys": [0.0, 1.0],
+    "phi_anc": [-3.15, 3.15],
+    "omega_anc": [0.0, 1.0],
     "tau": [0.1, 0.5]
   },
   "max_pulses": 100,
