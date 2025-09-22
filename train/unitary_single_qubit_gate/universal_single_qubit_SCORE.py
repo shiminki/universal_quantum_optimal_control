@@ -306,10 +306,15 @@ def main():
 
     trainer = UniversalModelTrainer(**trainer_params)
 
+    train_size = 12000
+    eval_size = 3000
+    batch_size = 300
+
+
+    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=train_size, random=True)
+    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=eval_size, random=True)
     
-    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000, random=True)
-    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
-    batch_size = 200 # ~37GB for len 100 model
+    
     # batch_size = 50 # fits ~37GB GPU memory for len 400 model
     
     
