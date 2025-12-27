@@ -56,8 +56,9 @@ def rotation_to_unitary(rotation_vector):
 from model.universal_model import UniversalQOCTransformer, Pipeline
 from train.unitary_single_qubit_gate.universal_single_qubit_SCORE import load_model_params
 
-model_option = "100 length"
-# model_option = "400 length"
+model_option = "delta control (0.2)"
+delta_control = None
+# model_option = "100 length"
 
 if model_option == "100 length":
     name = "transformer_len100"
@@ -67,13 +68,20 @@ elif model_option == "400 length":
     name = "transformer_len400"
     path = "demo_universal/weight/length_400.pt"
     params = load_model_params("demo_universal/params/length_400.json")
-else: # GRAPE
+
+elif model_option == "delta control (0.2)":
+    name = "delta control (W = 0.2)"
+    path = "demo_universal/weight/delta_control_0.2.pt"
+    params = load_model_params("demo_universal/params/length_100.json")
+    delta_control = 0.2
+
+elif model_option == "GRAPE": # GRAPE
     name = "GRAPE"
     path = "demo_universal/weight/grape.pt"
     params = load_model_params("demo_universal/params/grape.json")
 
-if model_option in ["100 length", "400 length"]:
 
+if model_option != "GRAPE":
     pipeline = Pipeline(
         UniversalQOCTransformer(**params),
         weight_path=path,
@@ -131,6 +139,7 @@ for target_name, rotation_vector, pulse in zip(train_set_name, train_set, pulses
     fidelity_contour_plot(
         target_name, U_target, pulse, model_name, 
         os.path.join(save_dir, "fidelity_contour_plot"),
+        delta_control=delta_control,
         phase_only=phase_control_only
     )
 
@@ -148,6 +157,7 @@ for target_name, rotation_vector, pulse in zip(train_set_name, train_set, pulses
     plot_fidelity_by_std(
         target_name, U_target, pulse, model_name,
         os.path.join(save_dir, "fidelity_vs_delta_std"),
+        delta_control=delta_control,
         phase_only=phase_control_only
     )
 
@@ -156,11 +166,16 @@ for target_name, rotation_vector, pulse in zip(train_set_name, train_set, pulses
     print("Generating qubit evolution video")
     # deltas = [-2, -1, -0.5, 0, 0.5, 1, 2]
     # epsilons = [0]
-    M = 11
+    M = 13
     errors = get_ore_ple_error_distribution(batch_size=M)
     deltas, epsilons = errors[0], errors[1]
     # # uniform dist
-    deltas = [-1 + 0.2 * i for i in range(M)]
+    # deltas = [-1 + 0.2 * i for i in range(M)]
+    deltas = [
+        -1, -0.7, -0.5, -0.3, -0.2, -0.1, 
+        0,
+        0.1, 0.2, 0.3, 0.5, 0.7, 1
+    ]
 
     bloch_list, pulse_info_list, fidelity_list = [], [], []
 
@@ -170,6 +185,7 @@ for target_name, rotation_vector, pulse in zip(train_set_name, train_set, pulses
     # for eps in epsilons:
     #     for delt in deltas:
     for eps, delt in zip(epsilons, deltas):
+
         # simulate
         psi = PSI_INIT
         bv, pi = [], []
@@ -188,7 +204,11 @@ for target_name, rotation_vector, pulse in zip(train_set_name, train_set, pulses
 
         bloch_list.append(np.vstack(([spinor_to_bloch(PSI_INIT)], bv)))
         pulse_info_list.append(pi)
-        fidelity_list.append(np.abs(torch.vdot(target_psi, psi))**2)
+
+        if delta_control is not None and np.abs(delt) > delta_control:
+            fidelity_list.append(np.abs(torch.vdot(PSI_INIT, psi))**2)
+        else:
+            fidelity_list.append(np.abs(torch.vdot(target_psi, psi))**2)
     
 
 

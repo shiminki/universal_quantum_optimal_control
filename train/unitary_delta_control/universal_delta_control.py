@@ -212,7 +212,7 @@ def fidelity(U_out: torch.Tensor, U_target: torch.Tensor, num_qubits: int=1) -> 
     F := max_{W \\in SU(2)} 1/16 * |Tr[(U_target^\\dagger (x) W^\\dagger) * U_out]|^2
 
     Let U_eff = (U_target^\\dagger (x) I) * U_out] and X = Tr_1[U_eff]
-    SVF of X is X = U diag(s1, s2) V^\\dagger
+    SVD of X is X = U diag(s1, s2) V^\\dagger
 
     Notice that the trace is maximized when W = U V^\\dagger. 
 

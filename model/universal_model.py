@@ -108,8 +108,8 @@ class UniversalQOCTransformer(nn.Module):
         euler_angles = UniversalQOCTransformer.euler_yxy_from_rotation_vector(rotation_vector_rescaled)  # (B, 3)
         score_sequence = UniversalQOCTransformer.score_sequence_from_yxy(euler_angles) # (B, 9, 2, 2)
 
-        # Flatten the score sequence to (B, 9*2*2)
-        score_flat = UniversalQOCTransformer._to_real_vector(score_sequence).to(torch.float)  # (B, 9, 2*2)
+        # Flatten the score sequence to (B, 2*9*2*2)
+        score_flat = UniversalQOCTransformer._to_real_vector(score_sequence).to(torch.float)  # (B, 9, 2*2*2)
         
         # Project to d_model
         emb = self.unitary_proj(score_flat.to(rotation_vector.device))  # (B, d_model)

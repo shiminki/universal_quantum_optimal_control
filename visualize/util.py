@@ -146,6 +146,27 @@ def build_SCORE_pulses(SCORE_emb=False):
     return SCORE_pulses
 
 
+###########################
+# Delta control util ######
+###########################
+
+def get_target_by_delta_control(U_target, delta, delta_control, center=0):
+    M = len(delta)
+    U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
+    threshold = delta_control
+
+    mask = (delta - center).abs() > threshold  # (Bm,)
+
+    # Batch identity with correct dtype/device
+    I = torch.eye(U_target.size(-1), dtype=U_target.dtype, device=U_target.device)\
+        .unsqueeze(0).expand_as(U_target_plot)  # (Bm, d, d)
+
+    # Replace where needed (keeps grads for unmasked entries)
+    U_target_plot = torch.where(mask.view(-1, 1, 1), I, U_target_plot)
+
+    return U_target_plot
+
+
 #############################
 # Pulse Parameter Plot ######
 #############################
@@ -213,14 +234,24 @@ def plot_pulse_param(file_path, title, y_labels, df):
 #############################
 
 
-def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000, phase_only=True):
+def fidelity_contour_plot(
+        target_name, U_target, pulse, name, save_dir, M=10000, 
+        delta_control = None,
+        phase_only=True):
 
     # print(pulse[:-1].to(dtype=torch.float64))
     total_time = sum(pulse[:, -1].to(dtype=torch.float64)) / np.pi
 
-    errors_mc = get_ore_ple_error_distribution(M, 1, 0.05)
-    U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
     pulses_plot = torch.stack([pulse]).repeat_interleave(M, dim=0)
+
+    errors_mc = get_ore_ple_error_distribution(M, 1, 0.05)
+
+    if delta_control is not None:
+        delta = errors_mc[0]
+        U_target_plot = get_target_by_delta_control(U_target, delta, delta_control)
+    else:
+        U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
+        
 
     g = batched_unitary_generator
 
@@ -236,6 +267,8 @@ def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000,
     
     # Create 2D grid of ORE and PLE
     ORE_vals = torch.linspace(-3, 3, 1000)
+    if delta_control is not None:
+        ORE_vals = torch.linspace(-1.5, 1.5, 1000)
     PLE_vals = torch.linspace(-0.15, 0.15, 50)
     ORE_grid, PLE_grid = torch.meshgrid(ORE_vals, PLE_vals, indexing="ij")
 
@@ -248,7 +281,22 @@ def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000,
 
     # Repeat target and pulse
     N = errors_grid.shape[1]
-    U_target_grid = U_target.expand(N, -1, -1)  # (N, d, d)
+
+    if delta_control is not None:
+        # Build mask: True where |delta| < delta_control
+        mask = (ORE_flat.abs() < delta_control)  # (N,)
+
+        # Identity matrix (same dtype/device as U_target)
+        I = torch.eye(U_target.shape[-1], dtype=U_target.dtype, device=U_target.device).expand(N, -1, -1)
+
+        # Broadcast U_target to (N, d, d)
+        U_repeated = U_target.expand(N, -1, -1)
+
+        # Select U_target or I depending on mask
+        U_target_grid = torch.where(mask[:, None, None], U_repeated, I)  # (N, d, d)
+    else:
+        U_target_grid = U_target.expand(N, -1, -1)
+
     pulses_grid = pulse.expand(N, -1, -1)       # (N, L, P)
 
     # Evaluate fidelity
@@ -270,6 +318,28 @@ def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000,
     plt.ylabel(r"$\epsilon / \Omega_{\max} \sim N(0, 0.05^2)$")
     plt.title(f"{target_name} of {name}\nE[F] = {F_mean:.4f} +/- {F_err:.4f}\nTotal Evolution Time: {total_time:.2f} pi")
     plt.grid(True)
+
+    # Add vertical lines and annotations if delta_control is provided
+    if delta_control is not None:
+        # Draw vertical lines at ±delta_control
+        plt.axvline(x=delta_control, color='red', linestyle='--', linewidth=2)
+        plt.axvline(x=-delta_control, color='red', linestyle='--', linewidth=2)
+
+        # Annotate text
+        y_min, y_max = plt.ylim()
+        x_min, x_max = plt.xlim()
+
+        # Between lines: U_target
+        plt.text(0, y_max * 0.9, "U",
+                color='red', ha='center', va='center', fontsize=14, fontweight='bold')
+
+        # Left region: "1"
+        plt.text(x_min + 0.1*(x_max - x_min), y_max * 0.9, "1",
+                color='red', ha='center', va='center', fontsize=14, fontweight='bold')
+
+        # Right region: "1"
+        plt.text(x_max - 0.1*(x_max - x_min), y_max * 0.9, "1",
+                color='red', ha='center', va='center', fontsize=14, fontweight='bold')
 
     os.makedirs(save_dir, exist_ok=True)
     
@@ -309,7 +379,10 @@ def get_avg_fidelity(U_target, pulse, M=10000, phase_only=True, delta_list=None)
     return fidelities
 
 
-def plot_fidelity_by_std(target_name, U_target, pulse, name, save_dir, M=10000, phase_only=True):
+def plot_fidelity_by_std(
+        target_name, U_target, pulse, name, save_dir, 
+        M=10000, delta_control=None, phase_only=True
+    ):
 
     # print(pulse[:-1].to(dtype=torch.float64))
     total_time = sum(pulse[:, -1].to(dtype=torch.float64)) / np.pi
@@ -321,7 +394,13 @@ def plot_fidelity_by_std(target_name, U_target, pulse, name, save_dir, M=10000, 
 
     for delta_std in tqdm(delta_vals):
         errors_mc = get_ore_ple_error_distribution(M, delta_std, 0.05)
-        U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
+
+        if delta_control is not None:
+            delta = errors_mc[0]
+            U_target_plot = get_target_by_delta_control(U_target, delta, delta_control)
+        else:
+            U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
+
         pulses_plot = torch.stack([pulse]).repeat_interleave(M, dim=0)
 
         U_out_plot = g(pulses_plot, errors_mc)
