@@ -251,6 +251,6 @@ with gr.Blocks() as demo:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--hf_weight", type=bool, help="Loads huggingface weights")
+    parser.add_argument("--hf_weight", type=bool, default=True, help="Loads huggingface weights")
     args = parser.parse_args()
     demo.launch(share=True)

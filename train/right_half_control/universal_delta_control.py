@@ -298,7 +298,7 @@ def main():
         "fidelity_fn": fidelity,
         "loss_fn": sharp_loss,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "delta_control": args.delta_control
+        "delta_control": 0
     }
 
     trainer = UniversalModelTrainer(**trainer_params)
