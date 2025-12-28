@@ -2,6 +2,7 @@ import gradio as gr
 import torch
 import sys, os, glob, math, numpy as np, pandas as pd
 import matplotlib
+import argparse
 matplotlib.use("Agg")
 
 
@@ -89,10 +90,10 @@ def compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw):
     meta = MODEL_SELECTION[model_option]
     name = meta["name"]
     params = load_model_params(meta["params"])
-    path = _resolve_weight_path(model_option)  # <- from HF model repo
-    # path = "demo_universal/weight/grape.pt"
-    path = meta["weight"]  # <- local path for testing
-    
+    # path = _resolve_weight_path(model_option)  # <- from HF model repo
+    # path = meta["weight"]  # <- local path for testing
+
+    path = _resolve_weight_path(model_option) if args.hf_weight else meta["weight"]
     
     axis = np.array([x_, y_, z_]); axis = axis / np.linalg.norm(axis)
     n_x, n_y, n_z = axis; theta = math.pi * theta_raw
@@ -247,5 +248,9 @@ with gr.Blocks() as demo:
     btn1.click(run_paramplot,[model,x_in,y_in,z_in,th],[param_gallery])
     btn2.click(run_fidelity,[model,x_in,y_in,z_in,th],[fid_gallery])
     btn3.click(run_evolution,[model,x_in,y_in,z_in,th],[vid_out,vid_dl])
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--hf_weight", type=bool, help="Loads huggingface weights")
+    args = parser.parse_args()
     demo.launch(share=True)
