@@ -280,6 +280,9 @@ def main():
     parser.add_argument("--num_epoch", type=int, default=1000, help="Number of training epochs")
     parser.add_argument("--save_path", type=str, default="weights/single_qubit_control/weights", help="Path to save model weights")
     parser.add_argument("--delta_control", type=float, default=None, help="threshold for delta control; generate identity for |delta| < delta_control")
+    parser.add_argument("--batch_size", type=int, default=50, help="Batch size for training")
+    parser.add_argument("--train_size", type=int, default=10000, help="Training dataset size")
+    parser.add_argument("--eval_size", type=int, default=2000, help="Evaluation dataset size")
     args = parser.parse_args()
 
 
@@ -304,14 +307,13 @@ def main():
     trainer = UniversalModelTrainer(**trainer_params)
 
 
-    train_size = 10000
-    eval_size = 2000
+    train_size = args.train_size
+    eval_size = args.eval_size
+    batch_size = args.batch_size
     
     train_rotation_vec, train_unitaries = build_SU2_dataset(dataset_size=train_size, random=True)
     eval_rotation_vec, eval_unitaries = build_SU2_dataset(dataset_size=eval_size, random=True)
-    batch_size = 400
-    # 200 fits ~37GB for len 100 model
-    # batch_size = 50 # fits ~37GB GPU memory for len 400 model
+   
     
     
     #####################
