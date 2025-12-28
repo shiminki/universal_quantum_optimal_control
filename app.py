@@ -34,18 +34,21 @@ MODEL_SELECTION = {
     "100 length": {
         "name": "transformer_len100",
         "filename": "length_100.pt",
+        "weight": "demo_universal/weight/length_100.pt",
         "params": "demo_universal/params/length_100.json",
         "type": "transformer",
     },
     "400 length": {
         "name": "transformer_len400",
         "filename": "length_400.pt",
+        "weight": "demo_universal/weight/length_400.pt",
         "params": "demo_universal/params/length_400.json",
         "type": "transformer",
     },
     "GRAPE": {
         "name": "GRAPE",
         "filename": "grape.pt",
+        "weight": "demo_universal/weight/grape.pt",
         "params": "demo_universal/params/grape.json",
         "type": "grape",
     },
@@ -86,8 +89,9 @@ def compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw):
     meta = MODEL_SELECTION[model_option]
     name = meta["name"]
     params = load_model_params(meta["params"])
-    # path = _resolve_weight_path(model_option)  # <- from HF model repo
-    path = "demo_universal/weight/grape.pt"
+    path = _resolve_weight_path(model_option)  # <- from HF model repo
+    # path = "demo_universal/weight/grape.pt"
+    path = meta["weight"]  # <- local path for testing
     
     
     axis = np.array([x_, y_, z_]); axis = axis / np.linalg.norm(axis)
