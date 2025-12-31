@@ -86,10 +86,9 @@ class UniversalModelTrainer:
 
         if self.delta_control is not None:
             delta = error[0]  # (Bm,)
-            # Build mask: which samples should become identity
-            threshold = self.delta_control
 
-            mask = delta > threshold  # (Bm,)
+            # Build mask: which samples should become identity
+            mask = delta > self.delta_control  # (Bm,)
 
             # Batch identity with correct dtype/device
             I = torch.eye(U_target.size(-1), dtype=U_target.dtype, device=U_target.device)\

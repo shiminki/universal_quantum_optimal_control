@@ -183,7 +183,8 @@ def fidelity(U_out: torch.Tensor, U_target: torch.Tensor, num_qubits: int) -> to
     return (trace_squared + d) / (d * (d + 1))
 
 def negative_log_loss(U_out, U_target, fidelity_fn, num_qubits):
-    return -torch.log(torch.mean(fidelity_fn(U_out, U_target, num_qubits)))
+    # return -torch.log(torch.mean(fidelity_fn(U_out, U_target, num_qubits)))
+    return torch.mean(-torch.log(fidelity_fn(U_out, U_target, num_qubits)))
 
 
 def infidelity_loss(U_out, U_target, fidelity_fn, num_qubits):
@@ -227,7 +228,8 @@ def build_SU2_dataset(dataset_size=10000, random=False) -> List[torch.Tensor]:
     else:
         eps = 1e-3
         theta = torch.rand(dataset_size) * math.pi + eps * torch.randn(dataset_size)
-        alpha = torch.rand(dataset_size) * 2 * math.pi + eps * torch.randn(dataset_size)
+        # alpha = torch.rand(dataset_size) * 2 * math.pi + eps * torch.randn(dataset_size)
+        alpha = torch.full((dataset_size,), math.pi)
         phi = torch.rand(dataset_size) * 2 * math.pi + eps * torch.randn(dataset_size)
 
     # Rotation axis (spherical coordinates)
@@ -299,7 +301,8 @@ def main():
         "model" : model, "unitary_generator" : batched_unitary_generator,
         "error_sampler": get_ore_ple_error_distribution,
         "fidelity_fn": fidelity,
-        "loss_fn": sharp_loss,
+        # "loss_fn": sharp_loss,
+        "loss_fn": negative_log_loss,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "delta_control": 0
     }
@@ -322,8 +325,9 @@ def main():
 
 
     # 5% PLE error'
-    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
-    
+    # error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
+    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.0} for delta_std in torch.arange(0.01, 0.1, 0.03)]
+
     trainer.train(
         train_rotation_vec,
         train_unitaries,
