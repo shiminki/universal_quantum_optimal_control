@@ -96,15 +96,15 @@ def batched_unitary_generator(
         Shape ``(B, 2, 2)`` complex64/128 – the composite unitary ``U_L ⋯ U_1``.
     """
 
-    if pulses.ndim != 3 or pulses.shape[-1] != 2:
-        raise ValueError("'pulses' must have shape (B, L, 2)")
+    if pulses.ndim != 3 or pulses.shape[-1] != 3:
+        raise ValueError("'pulses' must have shape (B, L, 3)")
 
     B, L, _ = pulses.shape
     device = pulses.device
     dtype = torch.cfloat
 
     # Unpack and reshape to broadcast with Pauli matrices.
-    phi, tau = pulses.unbind(dim=-1)  # each (B, L)
+    Omega, phi, tau = pulses.unbind(dim=-1)  # each (B, L)
 
     # (4, 2, 2) on correct device
     pauli = _get_paulis(device).type(dtype)
@@ -114,7 +114,7 @@ def batched_unitary_generator(
     epsilon = error[1]
 
     # Build base Hamiltonian H₀ for every pulse in parallel.
-    H_base = (
+    H_base = Omega [..., None, None] * (
         torch.cos(phi)[..., None, None] * pauli[1]
         + torch.sin(phi)[..., None, None] * pauli[2]
     )
@@ -289,7 +289,7 @@ def main():
 
 
     # Load model parameters from external JSON
-    model_params = load_model_params("train/unitary_single_qubit_gate/model_params.json")
+    model_params = load_model_params("train/right_half_control/model_params.json")
     model = UniversalQOCTransformer(**model_params)
 
     # load pretrained module
