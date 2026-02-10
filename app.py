@@ -117,6 +117,15 @@ def compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw):
 
     return pulse, U_target
 
+# Helper function that returns azimuthal and polar angles from an unit vector
+
+def get_angles_from_axis(x, y, z):
+    r = np.sqrt(x**2 + y**2 + z**2)
+    theta = np.arccos(z / r) if r != 0 else 0.0  # polar angle
+    phi = np.arctan2(y, x)                      # azimuthal angle
+    return phi, theta
+
+
 # 1. Compute pulse and CSV
 def run_params(model_option, x_, y_, z_, theta_raw):
     pulse, _ = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
@@ -127,20 +136,22 @@ def run_params(model_option, x_, y_, z_, theta_raw):
     return df, path
 
 # 2. Contour plot
-def run_contour(model_option, x_, y_, z_, theta_raw):
-    pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
+def run_contour(model_option, x_, y_, z_, lambda_raw):
+    pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, lambda_raw)
     outdir = os.path.join("demo_outputs","contour")
     os.makedirs(outdir,exist_ok=True)
-    target_name = f"(axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi)"
+    phi, theta = get_angles_from_axis(x_, y_, z_)
+    target_name = f"(axis=n(phi={phi:.3f}, theta={theta:.3f}), rotation={lambda_raw:.3f} pi)"
     fidelity_contour_plot(target_name,U,pulse,model_option,outdir,phase_only=True)
     imgs = sorted(glob.glob(os.path.join(outdir, f"{target_name}.png")))
     return imgs
 
 # 3. Pulse param plot
-def run_paramplot(model_option, x_, y_, z_, theta_raw,):
-    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi, {model_option}"
+def run_paramplot(model_option, x_, y_, z_, lambda_raw,):
+    phi, theta = get_angles_from_axis(x_, y_, z_)
+    target_name = f"axis=n(phi={phi:.3f}, theta={theta:.3f}), lambda={lambda_raw:.3f} pi, {model_option}"
 
-    pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
+    pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, lambda_raw)
     df = pd.DataFrame(pulse.numpy())
     outdir = os.path.join("demo_outputs","paramplot")
     os.makedirs(outdir,exist_ok=True)
@@ -152,11 +163,12 @@ def run_paramplot(model_option, x_, y_, z_, theta_raw,):
     return imgs
 
 # 4. Fidelity vs std
-def run_fidelity(model_option, x_, y_, z_, theta_raw):
-    pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
+def run_fidelity(model_option, x_, y_, z_, lambda_raw):
+    pulse, U = compute_pulse_and_unitary(model_option, x_, y_, z_, lambda_raw)
     outdir = os.path.join("demo_outputs","fidelity_std")
     os.makedirs(outdir,exist_ok=True)
-    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi, {model_option}"
+    phi, theta = get_angles_from_axis(x_, y_, z_)
+    target_name = f"axis=n(phi={phi:.3f}, theta={theta:.3f}), lambda={lambda_raw:.3f} pi"
 
     if not os.path.exists(os.path.join(outdir, f"{target_name}_fidelity.png")):
         plot_fidelity_by_std(target_name,U,pulse,model_option,outdir,phase_only=True)
@@ -165,12 +177,12 @@ def run_fidelity(model_option, x_, y_, z_, theta_raw):
     return imgs
 
 # 5. Evolution video
-def run_evolution(model_option, x_, y_, z_, theta_raw):
-    pulse, U_target = compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw)
+def run_evolution(model_option, x_, y_, z_, lambda_raw):
+    pulse, U_target = compute_pulse_and_unitary(model_option, x_, y_, z_, lambda_raw)
 
     df = pd.DataFrame(pulse.numpy(), columns=["phi", "tau"])
 
-    target_name = f"axis=({x_:.3f}, {y_:.3f}, {z_:.3f}), theta={theta_raw:.3f} pi, {model_option}"
+    target_name = f"axis=n(phi={get_angles_from_axis(x_, y_, z_)[0]:.3f}, theta={get_angles_from_axis(x_, y_, z_)[1]:.3f}), lambda={lambda_raw:.3f} pi, {model_option}"
     outdir=os.path.join("demo_outputs","evolution"); os.makedirs(outdir,exist_ok=True)
     os.makedirs(outdir, exist_ok=True)
     vid=os.path.join(outdir, f"{target_name}_evolution.mp4")

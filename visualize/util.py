@@ -188,12 +188,12 @@ def plot_pulse_param(file_path, title, y_labels, df):
     # Plot as step functions that are constant over each segment tau_k
     # Use 'post' with N+1 x-points and y extended by last value for clean edges
     axes[0].step(t_edges, np.r_[u_x, u_x[-1]], where='post')
-    axes[0].set_ylabel(r"$u_x(t)=\cos\phi$")
+    axes[0].set_ylabel(r"$H_x(t)/\Omega_{\max}$")
     axes[0].grid(True)
     axes[0].set_ylim(-1.1, 1.1)
 
     axes[1].step(t_edges, np.r_[u_y, u_y[-1]], where='post')
-    axes[1].set_ylabel(r"$u_y(t)=\sin\phi$")
+    axes[1].set_ylabel(r"$H_y(t)/\Omega_{\max}$")
     axes[1].grid(True)
     axes[1].set_ylim(-1.1, 1.1)
     axes[1].set_xlabel(r"Rotation time (units of $\pi$)")
