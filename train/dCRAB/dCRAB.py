@@ -22,34 +22,44 @@ def sample_errors(n_samples, seed=None):
     eps   = np.random.normal(0, EPSILON_STD, size=n_samples)
     return delta, eps
 
-# Build phi(t) from parameters and frequencies
-def build_phi(params, t, omegas):
-    # params: [phi0, a1, ..., aN, b1, ..., bN]
-    N = len(omegas)
-    phi0 = params[0]
-    a = params[1:1+N]
-    b = params[1+N:1+2*N]
-    phi = phi0 + sum(a[n] * np.cos(omegas[n]*t) + b[n] * np.sin(omegas[n]*t)
-                     for n in range(N))
-    return phi
+
+# Build H_x(t) and H_y(t) from parameters and frequencies
+def build_Hx_Hy(params, t, omegas_x, omegas_y):
+    # params: [a1, ..., aN, alpha1_x, ..., alphaN_x, b1, ..., bN, alpha1_y, ..., alphaN_y]
+    N = len(omegas_x)
+    a = params[0:N]
+    alpha_x = params[N:2*N]
+    b = params[2*N:3*N]
+    alpha_y = params[3*N:4*N]
+    H_x = np.zeros_like(t)
+    H_y = np.zeros_like(t)
+    for n in range(N):
+        H_x += a[n] * np.cos(omegas_x[n]*t + alpha_x[n])
+        H_y += b[n] * np.cos(omegas_y[n]*t + alpha_y[n])
+    return H_x, H_y
 
 # Compute unitary evolution for one error sample
-def propagate(phi_vals, t, delta, eps, X, Y, Z):
+def propagate(H_x, H_y, t, delta, eps, X, Y, Z):
     U = np.eye(2, dtype=complex)
     dt = t[1] - t[0]
-    for phi in phi_vals:
-        Hc = np.cos(phi)*X + np.sin(phi)*Y
-        H = (Hc + delta*Z) * (1 + eps) / 2
+    for hx, hy in zip(H_x, H_y):
+        # Enforce amplitude constraint: |H_x|^2 + |H_y|^2 <= 1/4
+        norm = np.sqrt(hx**2 + hy**2)
+        if norm > 0.5:
+            hx = hx * 0.5 / norm
+            hy = hy * 0.5 / norm
+        Hc = hx * X + hy * Y
+        H = (Hc + delta*Z) * (1 + eps)
         U = expm(-1j * H * dt) @ U
     return U
 
 # Average fidelity over error samples
-def average_infidelity(params, t, omegas, U_target, deltas, epss, X, Y, Z):
-    # Build control phases
-    phi_vals = build_phi(params, t, omegas)
+def average_infidelity(params, t, omegas_x, omegas_y, U_target, deltas, epss, X, Y, Z):
+    # Build control amplitudes
+    H_x, H_y = build_Hx_Hy(params, t, omegas_x, omegas_y)
     # Propagate for all samples
     Us = np.stack([
-        propagate(phi_vals, t, d, e, X, Y, Z)
+        propagate(H_x, H_y, t, d, e, X, Y, Z)
         for d, e in zip(deltas, epss)
     ], axis=0)  # shape (S,2,2)
     # Apply U_target dagger and compute traces
@@ -89,14 +99,16 @@ def dcrab_optimize(
     print("Starting dCRAB optimization...")
 
     for rnd in range(rounds):
-        # new basis frequencies
-        omegas = random_frequencies(N_modes, w_min, w_max, seed and seed+rnd)
-        # initial params: phi0=0, a_n,b_n small random
-        x0 = np.zeros(1 + 2*N_modes)
-        x0[1:] = 0.01 * np.random.randn(2*N_modes)
+        # new basis frequencies for x and y
+        omegas_x = random_frequencies(N_modes, w_min, w_max, seed and seed+rnd)
+        omegas_y = random_frequencies(N_modes, w_min, w_max, seed and seed+rnd+1000)
+        # initial params: a_n, alpha_x, b_n, alpha_y (all small random)
+        x0 = np.zeros(4*N_modes)
+        x0[:2*N_modes] = 0.1 * np.random.randn(2*N_modes)  # a_n, alpha_x
+        x0[2*N_modes:] = 0.1 * np.random.randn(2*N_modes)  # b_n, alpha_y
 
         # wrapper for optimizer
-        obj = lambda p: average_infidelity(p, t, omegas, U_target, deltas, epss, X, Y, Z)
+        obj = lambda p: average_infidelity(p, t, omegas_x, omegas_y, U_target, deltas, epss, X, Y, Z)
         # setup timing and iteration counter for callback
         start_time = time.time()
         iter_counter = {'i': 0}
@@ -120,7 +132,7 @@ def dcrab_optimize(
 
         if fid > best_fid:
             best_fid = fid
-            best_params = (res.x.copy(), omegas.copy())
+            best_params = (res.x.copy(), omegas_x.copy(), omegas_y.copy())
 
     return best_params, best_fid
 
@@ -132,18 +144,18 @@ if __name__ == '__main__':
     N = 10
 
     params, fid = dcrab_optimize(U_target,
-                                 T=6.0,
+                                 T=12.0,
                                  dt=0.01,
                                  N_modes=N,
-                                 rounds=5,
+                                 rounds=3,
                                  samples=200,
                                  w_min=0,
                                  w_max=2*N * np.pi,
                                  seed=42)
     print(f"Best fidelity: {fid:.6f}")
-    # params is a tuple (optimized params array, omegas array)
+    # params is a tuple (optimized params array, omegas_x array, omegas_y array)
 
     # Save parameters and frequencies to file
-    best_params_array, best_omegas = params
-    np.savez('dcrab_best_params.npz', params=best_params_array, omegas=best_omegas)
+    best_params_array, best_omegas_x, best_omegas_y = params
+    np.savez('dcrab_best_params.npz', params=best_params_array, omegas_x=best_omegas_x, omegas_y=best_omegas_y)
     print("Saved best parameters to 'dcrab_best_params.npz'.")

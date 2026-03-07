@@ -82,15 +82,13 @@ class UniversalModelTrainer:
         pulses_mc = pulses.repeat_interleave(self.monte_carlo, dim=0)   # (Bm, L, P)
         error = error_distribution(self.monte_carlo * U_target.shape[0]).to(self.device) # (Bm, …)
 
-        # TODO: set target == identity if |delta - delta_0| > threshold
         targets_mc = U_target.repeat_interleave(self.monte_carlo, dim=0)  # (Bm, d, d)
 
         if self.delta_control is not None:
             delta = error[0]  # (Bm,)
-            # Build mask: which samples should become identity
-            threshold = self.delta_control
 
-            mask = delta.abs() > threshold  # (Bm,)
+            # Build mask: which samples should become identity
+            mask = delta > self.delta_control  # (Bm,)
 
             # Batch identity with correct dtype/device
             I = torch.eye(U_target.size(-1), dtype=U_target.dtype, device=U_target.device)\
@@ -98,6 +96,8 @@ class UniversalModelTrainer:
 
             # Replace where needed (keeps grads for unmasked entries)
             targets_mc = torch.where(mask.view(-1, 1, 1), I, targets_mc)
+
+            
 
 
         U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)

@@ -96,15 +96,15 @@ def batched_unitary_generator(
         Shape ``(B, 2, 2)`` complex64/128 – the composite unitary ``U_L ⋯ U_1``.
     """
 
-    if pulses.ndim != 3 or pulses.shape[-1] != 2:
-        raise ValueError("'pulses' must have shape (B, L, 2)")
+    if pulses.ndim != 3 or pulses.shape[-1] != 3:
+        raise ValueError("'pulses' must have shape (B, L, 3)")
 
     B, L, _ = pulses.shape
     device = pulses.device
     dtype = torch.cfloat
 
     # Unpack and reshape to broadcast with Pauli matrices.
-    phi, tau = pulses.unbind(dim=-1)  # each (B, L)
+    Omega, phi, tau = pulses.unbind(dim=-1)  # each (B, L)
 
     # (4, 2, 2) on correct device
     pauli = _get_paulis(device).type(dtype)
@@ -114,7 +114,7 @@ def batched_unitary_generator(
     epsilon = error[1]
 
     # Build base Hamiltonian H₀ for every pulse in parallel.
-    H_base = (
+    H_base = Omega [..., None, None] * (
         torch.cos(phi)[..., None, None] * pauli[1]
         + torch.sin(phi)[..., None, None] * pauli[2]
     )
@@ -183,7 +183,8 @@ def fidelity(U_out: torch.Tensor, U_target: torch.Tensor, num_qubits: int) -> to
     return (trace_squared + d) / (d * (d + 1))
 
 def negative_log_loss(U_out, U_target, fidelity_fn, num_qubits):
-    return -torch.log(torch.mean(fidelity_fn(U_out, U_target, num_qubits)))
+    # return -torch.log(torch.mean(fidelity_fn(U_out, U_target, num_qubits)))
+    return torch.mean(-torch.log(fidelity_fn(U_out, U_target, num_qubits)))
 
 
 def infidelity_loss(U_out, U_target, fidelity_fn, num_qubits):
@@ -227,7 +228,8 @@ def build_SU2_dataset(dataset_size=10000, random=False) -> List[torch.Tensor]:
     else:
         eps = 1e-3
         theta = torch.rand(dataset_size) * math.pi + eps * torch.randn(dataset_size)
-        alpha = torch.rand(dataset_size) * 2 * math.pi + eps * torch.randn(dataset_size)
+        # alpha = torch.rand(dataset_size) * 2 * math.pi + eps * torch.randn(dataset_size)
+        alpha = torch.full((dataset_size,), math.pi)
         phi = torch.rand(dataset_size) * 2 * math.pi + eps * torch.randn(dataset_size)
 
     # Rotation axis (spherical coordinates)
@@ -280,11 +282,14 @@ def main():
     parser.add_argument("--num_epoch", type=int, default=1000, help="Number of training epochs")
     parser.add_argument("--save_path", type=str, default="weights/single_qubit_control/weights", help="Path to save model weights")
     parser.add_argument("--delta_control", type=float, default=None, help="threshold for delta control; generate identity for |delta| < delta_control")
+    parser.add_argument("--batch_size", type=int, default=50, help="Batch size for training")
+    parser.add_argument("--train_size", type=int, default=10000, help="Training dataset size")
+    parser.add_argument("--eval_size", type=int, default=2000, help="Evaluation dataset size")
     args = parser.parse_args()
 
 
     # Load model parameters from external JSON
-    model_params = load_model_params("train/unitary_single_qubit_gate/model_params.json")
+    model_params = load_model_params("train/right_half_control/model_params.json")
     model = UniversalQOCTransformer(**model_params)
 
     # load pretrained module
@@ -296,22 +301,22 @@ def main():
         "model" : model, "unitary_generator" : batched_unitary_generator,
         "error_sampler": get_ore_ple_error_distribution,
         "fidelity_fn": fidelity,
-        "loss_fn": sharp_loss,
+        # "loss_fn": sharp_loss,
+        "loss_fn": negative_log_loss,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "delta_control": args.delta_control
+        "delta_control": 0
     }
 
     trainer = UniversalModelTrainer(**trainer_params)
 
 
-    train_size = 10000
-    eval_size = 2000
+    train_size = args.train_size
+    eval_size = args.eval_size
+    batch_size = args.batch_size
     
     train_rotation_vec, train_unitaries = build_SU2_dataset(dataset_size=train_size, random=True)
     eval_rotation_vec, eval_unitaries = build_SU2_dataset(dataset_size=eval_size, random=True)
-    batch_size = 400
-    # 200 fits ~37GB for len 100 model
-    # batch_size = 50 # fits ~37GB GPU memory for len 400 model
+   
     
     
     #####################
@@ -320,8 +325,9 @@ def main():
 
 
     # 5% PLE error'
-    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
-    
+    # error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
+    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.0} for delta_std in torch.arange(0.01, 0.1, 0.03)]
+
     trainer.train(
         train_rotation_vec,
         train_unitaries,
