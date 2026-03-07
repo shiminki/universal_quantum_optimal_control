@@ -190,3 +190,58 @@ def test_euler_yxy_from_rotation_vector(batch_size=10000, tol=5e-3):
 
 # Run the vectorized test
 test_euler_yxy_from_rotation_vector(batch_size=10000)
+
+
+def test_X_pi_pulse_robustness(num_samples=1000):
+    import pandas as pd
+
+    df = pd.read_csv("smoothing/X_pi_pulse.csv")
+    # Columns: t (us), Omega_x (2pi MHz), Omega_y (2pi MHz), Omega_z (2pi MHz)
+
+    sigma_x = torch.tensor([[0, 1], [1, 0]], dtype=torch.cfloat)
+    sigma_y = torch.tensor([[0, -1j], [1j, 0]], dtype=torch.cfloat)
+    sigma_z = torch.tensor([[1, 0], [0, -1]], dtype=torch.cfloat)
+
+    t_vals = torch.tensor(df["t (us)"].values, dtype=torch.float64)
+    Omega_x_vals = torch.tensor(df["Omega_x (2pi MHz)"].values, dtype=torch.float64)
+    Omega_y_vals = torch.tensor(df["Omega_y (2pi MHz)"].values, dtype=torch.float64)
+
+    sigma_x = sigma_x.to(torch.cdouble)
+    sigma_y = sigma_y.to(torch.cdouble)
+    sigma_z = sigma_z.to(torch.cdouble)
+
+    # delta ~ 80 * N(0, 1), shape: (num_samples,)
+    delta_samples = 2 * np.pi * 80.0 * torch.randn(num_samples, dtype=torch.float64)
+
+    # Accumulate U = V_L @ ... @ V_1 for each sample simultaneously
+    U = torch.eye(2, dtype=torch.cdouble).unsqueeze(0).expand(num_samples, 2, 2).clone()
+
+    L = len(df)
+    for j in range(L):
+        Omega_x_j = 2 * np.pi * Omega_x_vals[j]  # rad/us
+        Omega_y_j = 2 * np.pi * Omega_y_vals[j]  # rad/us
+        t_j = t_vals[j]                            # us
+
+        # H_j(delta) = 1/2 * (Omega_x_j * sigma_x + Omega_y_j * sigma_y + delta * sigma_z)
+        H_common = 0.5 * (Omega_x_j * sigma_x + Omega_y_j * sigma_y)          # (2, 2)
+        H_delta = 0.5 * delta_samples[:, None, None] * sigma_z                 # (num_samples, 2, 2)
+        H_j = H_common.unsqueeze(0) + H_delta                                  # (num_samples, 2, 2)
+
+        # V_j = exp(-i * H_j * t_j)
+        V_j = torch.matrix_exp(-1j * H_j * t_j)                               # (num_samples, 2, 2)
+        U = V_j @ U
+
+    # Fidelity = (|Tr(U_out^dag @ sigma_x)|^2 + 2) / 6
+    UdagSx = U.conj().transpose(-2, -1) @ sigma_x.unsqueeze(0)                # (num_samples, 2, 2)
+    trace_vals = UdagSx[:, 0, 0] + UdagSx[:, 1, 1]                           # (num_samples,)
+    fidelities = (trace_vals.abs() ** 2 + 2) / 6
+
+    avg_fidelity = fidelities.mean().item()
+    print(f"Average fidelity: {avg_fidelity:.4f} ({avg_fidelity * 100:.2f}%)")
+    assert abs(avg_fidelity - 0.991) < 0.01, (
+        f"Expected ~99.1% average fidelity, got {avg_fidelity * 100:.2f}%"
+    )
+    print("Test passed: X pi pulse average fidelity is ~99.1%")
+
+
+test_X_pi_pulse_robustness()

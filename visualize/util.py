@@ -151,58 +151,67 @@ def build_SCORE_pulses(SCORE_emb=False):
 #############################
 
 
-def plot_pulse_param(file_path, title, y_labels, df):
-    # --- Extract columns per your mapping ---
-    phi = df.iloc[:, 0].to_numpy(dtype=float)   # radians
-    tau = df.iloc[:, 1].to_numpy(dtype=float)   # durations
+def plot_pulse_param(file_path, title, df, Omega, df_smooth=None,
+                     phi=0.0, theta=0.0, lam=0.0, model="", cutoff=0.0):
+    t = df["t (us)"].to_numpy(dtype=float) * 1000   # duration in ns
+    H_x = df["Omega_x (2pi MHz)"].to_numpy(dtype=float)
+    H_y = df["Omega_y (2pi MHz)"].to_numpy(dtype=float)
+    H_z = df["Omega_z (2pi MHz)"].to_numpy(dtype=float)
 
-    # Precompute edges in units of pi for plotting
-    t_edges = np.concatenate(([0.0], np.cumsum(tau / math.pi)))  # length N+1
+    t_edges = np.concatenate(([0.0], np.cumsum(t)))  # length N+1
+    total_time = t.sum()
 
-    # Controls
-    u_x = np.cos(phi)
-    u_y = np.sin(phi)
+    labels = [r"$\Omega_x(t)$ $(2\pi$ MHz)", r"$\Omega_y(t)$ $(2\pi$ MHz)", r"$\Omega_z(t)$ $(2\pi$ MHz)"]
+    colors_orig = ['C0', 'C0', 'C0']
+    data_orig = [H_x, H_y, H_z]
 
-    # 1×2 layout: left = histogram, right = stacked u_x / u_y
-    fig, (ax_hist, ax_params) = plt.subplots(
-        nrows=1, ncols=2,
-        figsize=(14, 6),
-        gridspec_kw={'width_ratios': [1, 3], 'wspace': 0.4}
+    base_title = (
+        f"Pulse parameter for "
+        r"$U(\phi=$" + f"{phi:.3f}, " + r"$\theta=$" + f"{theta:.3f}, "
+        + r"$\lambda=$" + f"{lam:.3f}" + r"$\pi)$"
+        + f" for model={model}"
+        + f"\nRabi = $(2\\pi)$ {Omega} MHz, runtime = {total_time:.2f} ns"
     )
 
-    # --- Left: histogram of pulse durations (in units of pi) ---
-    ax_hist.hist(tau / math.pi, bins=20, edgecolor='black')
-    ax_hist.set_xlabel(r"Pulse Time (units of $\pi$)")
-    ax_hist.set_ylabel("Count")
-    ax_hist.set_title("Pulse Length Histogram")
+    if df_smooth is not None:
+        Hx_s = df_smooth["Omega_x (2pi MHz)"].to_numpy(dtype=float)
+        Hy_s = df_smooth["Omega_y (2pi MHz)"].to_numpy(dtype=float)
+        Hz_s = df_smooth["Omega_z (2pi MHz)"].to_numpy(dtype=float)
+        data_smooth = [Hx_s, Hy_s, Hz_s]
 
-    # --- Right: stacked u_x and u_y ---
-    fig.delaxes(ax_params)  # replace the placeholder with a 2-row stack
-    axes = fig.add_gridspec(
-        nrows=2, ncols=1,
-        left=0.40, right=0.98,
-        top=0.90, bottom=0.10,
-        hspace=0.3
-    ).subplots(sharex=True)
+        fig, axes = plt.subplots(nrows=6, ncols=1, figsize=(10, 12), sharex=True)
 
-    # Plot as step functions that are constant over each segment tau_k
-    # Use 'post' with N+1 x-points and y extended by last value for clean edges
-    axes[0].step(t_edges, np.r_[u_x, u_x[-1]], where='post')
-    axes[0].set_ylabel(r"$H_x(t)/\Omega_{\max}$")
-    axes[0].grid(True)
-    axes[0].set_ylim(-1.1, 1.1)
+        # Top 3: original
+        for i in range(3):
+            axes[i].step(t_edges, np.r_[data_orig[i], data_orig[i][-1]], where='post', color='C0')
+            axes[i].set_ylabel(labels[i])
+            axes[i].grid(True)
+            axes[i].set_ylim(-1.1 * Omega, 1.1 * Omega)
+        axes[0].set_title(base_title, fontsize=12)
 
-    axes[1].step(t_edges, np.r_[u_y, u_y[-1]], where='post')
-    axes[1].set_ylabel(r"$H_y(t)/\Omega_{\max}$")
-    axes[1].grid(True)
-    axes[1].set_ylim(-1.1, 1.1)
-    axes[1].set_xlabel(r"Rotation time (units of $\pi$)")
+        # Bottom 3: filtered
+        for i in range(3):
+            axes[3 + i].step(t_edges, np.r_[data_smooth[i], data_smooth[i][-1]], where='post', color='C1')
+            axes[3 + i].set_ylabel(labels[i])
+            axes[3 + i].grid(True)
+            axes[3 + i].set_ylim(-1.1 * Omega, 1.1 * Omega)
+        smooth_title = base_title + f"\nLow pass filter with cutoff $(2\\pi)$ {cutoff:.0f} MHz"
+        axes[3].set_title(smooth_title, fontsize=12)
 
-    # --- Title & save ---
-    fig.suptitle(f"Optimal Control for {title}", fontsize=16)
+        axes[5].set_xlabel("Rotation time (ns)")
+    else:
+        fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(10, 6), sharex=True)
+        for i in range(3):
+            axes[i].step(t_edges, np.r_[data_orig[i], data_orig[i][-1]], where='post', color='C0')
+            axes[i].set_ylabel(labels[i])
+            axes[i].grid(True)
+            axes[i].set_ylim(-1.1 * Omega, 1.1 * Omega)
+        axes[0].set_title(base_title, fontsize=12)
+        axes[2].set_xlabel("Rotation time (ns)")
+
     os.makedirs(file_path, exist_ok=True)
     out_path = os.path.join(file_path, f"{title}.png")
-    plt.tight_layout(rect=[0, 0, 1, 0.94])
+    plt.tight_layout()
     plt.savefig(out_path)
     plt.close(fig)
 
@@ -213,7 +222,7 @@ def plot_pulse_param(file_path, title, y_labels, df):
 #############################
 
 
-def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000, phase_only=True):
+def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000, phase_only=True, Omega=None):
 
     # print(pulse[:-1].to(dtype=torch.float64))
     total_time = sum(pulse[:, -1].to(dtype=torch.float64)) / np.pi
@@ -260,15 +269,31 @@ def fidelity_contour_plot(target_name, U_target, pulse, name, save_dir, M=10000,
     PLE_np = PLE_grid.detach().cpu().numpy()
     F_np = F_grid.numpy()
 
+    title = f"{target_name} of {name}\nE[F] = {F_mean:.4f} +/- {F_err:.4f}\nTotal Evolution Time: {total_time:.2f} pi"
+    x_label = r"$\delta / \Omega_{\max} \sim N(0, 1)$"
+    y_label = r"$\epsilon / \Omega_{\max} \sim N(0, 0.05^2)$"
+
+
+    if Omega is not None:
+        Omega_angular = 2 * math.pi * Omega
+        total_time = sum(pulse[:, -1].to(dtype=torch.float64)) / Omega_angular
+        title = f"{target_name} of {name}\nE[F] = {F_mean:.4f} +/- {F_err:.4f}\nTotal Evolution Time: {(total_time * 1000):.2f} ns ({(total_time * Omega * 2):.2f} pi) with Rabi Freq {Omega} (2pi MHz)"
+
+        ORE_np *= Omega
+        PLE_np *= Omega
+
+        x_label = r"$\delta$ (MHz, scaled by Rabi freq)"
+        y_label = r"$\epsilon$ (MHz, scaled by Rabi freq)"
+
     plt.figure(figsize=(8, 6))
     # contour = plt.contourf(ORE_np, PLE_np, F_np, levels=20, cmap='viridis')
-    contour = plt.contourf(ORE_np, PLE_np, F_np, levels=[0.8, 0.9, 0.95, 0.99, 0.999, 1.0], cmap='viridis')
+    contour = plt.contourf(ORE_np, PLE_np, F_np, levels=[0.8, 0.9, 0.95, 0.97, 0.98, 0.99, 0.999, 1.0], cmap='viridis')
     plt.contour(ORE_np, PLE_np, F_np, levels=[0.95, 0.99, 0.999], colors='white', linewidths=1.5)
 
     plt.colorbar(contour, label='Fidelity')
-    plt.xlabel(r"$\delta / \Omega_{\max} \sim N(0, 1)$")
-    plt.ylabel(r"$\epsilon / \Omega_{\max} \sim N(0, 0.05^2)$")
-    plt.title(f"{target_name} of {name}\nE[F] = {F_mean:.4f} +/- {F_err:.4f}\nTotal Evolution Time: {total_time:.2f} pi")
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(title)
     plt.grid(True)
 
     os.makedirs(save_dir, exist_ok=True)
@@ -304,7 +329,7 @@ def get_avg_fidelity(U_target, pulse, M=10000, phase_only=True, delta_list=None)
         F_mean = F.mean().item()
         F_err = F.std().item() / np.sqrt(M)
 
-        fidelities[delta_std] = f"{F_mean:.4f} +/- {F_err:.4f}"
+        fidelities[delta_std] = (F_mean, F_err)
     
     return fidelities
 
@@ -314,23 +339,27 @@ def plot_fidelity_by_std(target_name, U_target, pulse, name, save_dir, M=10000, 
     # print(pulse[:-1].to(dtype=torch.float64))
     total_time = sum(pulse[:, -1].to(dtype=torch.float64)) / np.pi
 
-    fidelities = {}
-    g = batched_unitary_generator
+    fidelities = get_avg_fidelity(
+        U_target, pulse, delta_list = list(torch.arange(0.01, 2.0, 0.01))
+    )
 
-    delta_vals = torch.arange(0.01, 2.0, 0.01)
+    # fidelities = {}
+    # g = batched_unitary_generator
 
-    for delta_std in tqdm(delta_vals):
-        errors_mc = get_ore_ple_error_distribution(M, delta_std, 0.05)
-        U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
-        pulses_plot = torch.stack([pulse]).repeat_interleave(M, dim=0)
+    # delta_vals = torch.arange(0.01, 2.0, 0.01)
 
-        U_out_plot = g(pulses_plot, errors_mc)
-        F = fidelity(U_out_plot, U_target_plot, 1)
+    # for delta_std in tqdm(delta_vals):
+    #     errors_mc = get_ore_ple_error_distribution(M, delta_std, 0.05)
+    #     U_target_plot = torch.stack([U_target]).repeat_interleave(M, dim=0)
+    #     pulses_plot = torch.stack([pulse]).repeat_interleave(M, dim=0)
 
-        F_mean = F.mean().item()
-        F_err = F.std().item() / np.sqrt(M)
+    #     U_out_plot = g(pulses_plot, errors_mc)
+    #     F = fidelity(U_out_plot, U_target_plot, 1)
 
-        fidelities[delta_std] = (F_mean, F_err)
+    #     F_mean = F.mean().item()
+    #     F_err = F.std().item() / np.sqrt(M)
+
+    #     fidelities[delta_std] = (F_mean, F_err)
 
         
     # Extract values for plotting
@@ -439,7 +468,8 @@ def animate_multi_error_bloch(
     epsilon_list,         # list of epsilon values
     name,
     save_path="multi_bloch_qutip.mp4",
-    phase_only=True
+    phase_only=True,
+    Omega=None
 ):
     num_qubits = len(bloch_vectors_list)
     num_frames = bloch_vectors_list[0].shape[0]
@@ -507,11 +537,18 @@ def animate_multi_error_bloch(
                     # ham_vec = [np.cos(phi), np.sin(phi), 0]
                 
         T = cumulative_times[frame]
-        title_str = (
-            f"{name}\n"
-            fr"Total Time: {T:.4f}$\pi$"
-            f"\nE[F] = {np.mean(fidelity_list):.4f} +/- {(np.std(fidelity_list) / np.sqrt(len(fidelity_list))):.4f}"
-        )
+        if Omega is not None:
+            title_str = (
+                f"{name}\n"
+                fr"Total Time: {(1000 * T / (2 * Omega)):.4f} ns ({T:.4f}$\pi)$"
+                f"\nE[F] = {np.mean(fidelity_list):.4f} +/- {(np.std(fidelity_list) / np.sqrt(len(fidelity_list))):.4f}"
+            )
+        else:
+            title_str = (
+                f"{name}\n"
+                fr"Total Time: {T:.4f}$\pi$"
+                f"\nE[F] = {np.mean(fidelity_list):.4f} +/- {(np.std(fidelity_list) / np.sqrt(len(fidelity_list))):.4f}"
+            )
         fig.suptitle(title_str, fontsize=14)
         # Draw sphere and elements
         b.make_sphere()
