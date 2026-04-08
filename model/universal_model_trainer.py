@@ -10,6 +10,8 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
 
+import copy
+
 import matplotlib.pyplot as plt
 
 from model.universal_model import UniversalQOCTransformer
@@ -201,7 +203,7 @@ class UniversalModelTrainer:
                                 k: v.detach().cpu().clone() for k, v in self.model.state_dict().items()
                             }
                         elif isinstance(self.model, GRAPE):
-                            self.best_state = self.model.get_weights().detach().cpu().clone()
+                            self.best_state = copy.deepcopy(self.model.state_dict())
                         # self.best_pulses = self.model(train_set.to(self.device)).detach().cpu()
 
                     pbar.set_postfix({
