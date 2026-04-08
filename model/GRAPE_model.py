@@ -66,7 +66,8 @@ class GRAPE(nn.Module):
             nn.ReLU(),
             nn.Linear(L, L, bias=False),
             nn.ReLU(),
-            nn.Linear(L, L, bias=False)
+            nn.Linear(L, L, bias=False),
+            nn.Sigmoid()
         )
 
     def forward(self, U_target: torch.Tensor) -> torch.Tensor:

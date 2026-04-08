@@ -106,28 +106,37 @@ def batched_unitary_generator(
     # Unpack and reshape to broadcast with Pauli matrices.
     phi, tau = pulses.unbind(dim=-1)  # each (B, L)
 
-    # (4, 2, 2) on correct device
-    pauli = _get_paulis(device).type(dtype)
-
     # ORE and PLE
     delta = error[0]
     epsilon = error[1]
 
-    # Build base Hamiltonian H₀ for every pulse in parallel.
-    H_base = (
-        torch.cos(phi)[..., None, None] * pauli[1]
-        + torch.sin(phi)[..., None, None] * pauli[2]
-    )
-    
-    H = H_base + delta[..., None, None, None] * pauli[3]
+    # Closed-form 2×2 propagator (Rodrigues' rotation formula).
+    #   H   = 0.5·(1+ε) · (cos φ σ_x + sin φ σ_y + δ σ_z)
+    #   v   = 0.5·(1+ε)·τ · (cos φ, sin φ, δ)
+    #   α   = |v|
+    #   U   = cos α · I − i (sin α / α) (v·σ)
+    # Avoids torch.linalg.matrix_exp on tens of thousands of 2×2 matrices,
+    # which is the dominant cost of the previous implementation.
+    A = 0.5 * (1.0 + epsilon[..., None]) * tau                  # (B, L)
+    v_x = A * torch.cos(phi)                                     # (B, L)
+    v_y = A * torch.sin(phi)                                     # (B, L)
+    v_z = A * delta[..., None]                                   # (B, L)
+    alpha = torch.sqrt(v_x * v_x + v_y * v_y + v_z * v_z)        # (B, L)
 
-    H = 0.5 * H * (1 + epsilon[..., None, None, None])
+    cos_a = torch.cos(alpha)
+    sinc_a = torch.sinc(alpha / math.pi)  # sin(α)/α, numerically safe at α=0
 
-    # U_k = exp(-i H_k t_k)
-    U = torch.linalg.matrix_exp(-1j * H * tau[..., None, None])  # (B, L, 2, 2)
+    u00 = (cos_a - 1j * sinc_a * v_z).to(dtype)
+    u01 = (-sinc_a * (1j * v_x + v_y)).to(dtype)
+    u10 = (-sinc_a * (1j * v_x - v_y)).to(dtype)
+    u11 = (cos_a + 1j * sinc_a * v_z).to(dtype)
 
+    U = torch.stack(
+        [torch.stack([u00, u01], dim=-1),
+         torch.stack([u10, u11], dim=-1)],
+        dim=-2,
+    )  # (B, L, 2, 2)
 
-    # U: (B, L, 2, 2)   want: U[:, L-1] @ ... @ U[:, 1] @ U[:, 0]
     X = U
     I = torch.eye(2, dtype=dtype, device=device).expand(B, 1, 2, 2)
 
@@ -143,7 +152,6 @@ def batched_unitary_generator(
 
 
     return U_out
-
 
 
 
@@ -300,10 +308,14 @@ def main():
 
     trainer = UniversalModelTrainer(**trainer_params)
 
+    # DEBUG
+    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=64, random=True)
+    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=16, random=True)
+    batch_size = 8 # ~37GB for len 100 model
     
-    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000, random=True)
-    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
-    batch_size = 200 # ~37GB for len 100 model
+    # train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000, random=True)
+    # eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
+    # batch_size = 200 # ~37GB for len 100 model
     # batch_size = 50 # fits ~37GB GPU memory for len 400 model
     
     

@@ -295,23 +295,21 @@ def main():
         "model" : model, "unitary_generator" : batched_unitary_generator,
         "error_sampler": get_ore_ple_error_distribution,
         "fidelity_fn": fidelity,
-        "loss_fn": sharp_loss,
+        "loss_fn": infidelity_loss,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
     }
 
     trainer = UniversalModelTrainer(**trainer_params)
 
     # DEBUG
-    # _, train_unitaries = build_SU2_dataset(batch_size=100, random=True)
-    # _, eval_unitaries = build_SU2_dataset(batch_size=20, random=True)
+    # _, train_unitaries = build_SU2_dataset(batch_size=128, random=True)
+    # _, eval_unitaries = build_SU2_dataset(batch_size=32, random=True)
+    # batch_size = 16
 
-    _, train_unitaries = build_SU2_dataset(batch_size=10000, random=True)
-    _, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
+    _, train_unitaries = build_SU2_dataset(batch_size=8192, random=True)
+    _, eval_unitaries = build_SU2_dataset(batch_size=1024, random=True)
+    batch_size = 256
 
-    # # FOR DEBUGGING
-    # train_rotation_vec, train_unitaries = build_X_pi_2_dataset(batch_size=100)
-    # eval_rotation_vec, eval_unitaries = build_X_pi_2_dataset(batch_size=100)
-    
     #####################
     ## Training #########
     #####################
@@ -320,7 +318,7 @@ def main():
     # 5% PLE error'
     # error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
     error_params_list = [{"delta_std" : 1.0, "epsilon_std": 0.05}]
-    batch_size = 20
+    
 
     train_unitaries_copy = train_unitaries.clone()
     eval_unitaries_copy = eval_unitaries.clone()
