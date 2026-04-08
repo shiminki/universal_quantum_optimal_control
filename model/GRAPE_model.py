@@ -12,12 +12,17 @@ __all__ = ["GRAPE"]
 
 
 def _to_real_vector(U: torch.Tensor) -> torch.Tensor:
-    """Flatten a complex matrix into a real‑valued vector with alternating real and imag components (…, 2*d*d)."""
-    real = U.real.reshape(*U.shape[:-2], -1)  # shape: (..., d*d)
-    imag = U.imag.reshape(*U.shape[:-2], -1)  # shape: (..., d*d)
+    """Flatten a complex matrix/vector into a real‑valued vector with alternating real and imag components.
+
+    Accepts either a flattened complex tensor of shape (..., d*d) or a complex
+    matrix of shape (..., d, d), and returns a real tensor of shape (..., 2*d*d).
+    """
+    flat = U.reshape(*U.shape[:-2], -1) if U.dim() >= 2 and U.shape[-1] == U.shape[-2] else U
+    real = flat.real  # shape: (..., d*d)
+    imag = flat.imag  # shape: (..., d*d)
 
     stacked = torch.stack((real, imag), dim=-1)  # shape: (..., d*d, 2)
-    interleaved = stacked.reshape(*U.shape[:-2], -1)  # shape: (..., 2*d*d)
+    interleaved = stacked.reshape(*flat.shape[:-1], -1)  # shape: (..., 2*d*d)
 
     return interleaved
 
@@ -57,8 +62,13 @@ class GRAPE(nn.Module):
         self.layer = nn.Sequential(
             nn.Linear(8, L, bias=False),
             nn.ReLU(),
+            nn.Linear(L, L, bias=False),
+            nn.ReLU(),
+            nn.Linear(L, L, bias=False),
+            nn.ReLU(),
             nn.Linear(L, L, bias=False)
         )
+
     def forward(self, U_target: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the GRAPE model.

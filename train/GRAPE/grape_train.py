@@ -41,7 +41,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
-from model.GRAPE_model import GRAPE, GRAPE_finetune_X_pi_2
+from model.GRAPE_model import GRAPE
 from model.universal_model_trainer import UniversalModelTrainer
 
 
@@ -107,25 +107,36 @@ def batched_unitary_generator(
     # Unpack and reshape to broadcast with Pauli matrices.
     phi, tau = pulses.unbind(dim=-1)  # each (B, L)
 
-    # (4, 2, 2) on correct device
-    pauli = _get_paulis(device).type(dtype)
-
     # ORE and PLE
     delta = error[0]
     epsilon = error[1]
 
-    # Build base Hamiltonian H₀ for every pulse in parallel.
-    H_base = (
-        torch.cos(phi)[..., None, None] * pauli[1]
-        + torch.sin(phi)[..., None, None] * pauli[2]
-    )
-    
-    H = H_base + delta[..., None, None, None] * pauli[3]
+    # Closed-form 2×2 propagator (Rodrigues' rotation formula).
+    #   H   = 0.5·(1+ε) · (cos φ σ_x + sin φ σ_y + δ σ_z)
+    #   v   = 0.5·(1+ε)·τ · (cos φ, sin φ, δ)
+    #   α   = |v|
+    #   U   = cos α · I − i (sin α / α) (v·σ)
+    # Avoids torch.linalg.matrix_exp on tens of thousands of 2×2 matrices,
+    # which is the dominant cost of the previous implementation.
+    A = 0.5 * (1.0 + epsilon[..., None]) * tau                  # (B, L)
+    v_x = A * torch.cos(phi)                                     # (B, L)
+    v_y = A * torch.sin(phi)                                     # (B, L)
+    v_z = A * delta[..., None]                                   # (B, L)
+    alpha = torch.sqrt(v_x * v_x + v_y * v_y + v_z * v_z)        # (B, L)
 
-    H = 0.5 * H * (1 + epsilon[..., None, None, None])
+    cos_a = torch.cos(alpha)
+    sinc_a = torch.sinc(alpha / math.pi)  # sin(α)/α, numerically safe at α=0
 
-    # U_k = exp(-i H_k t_k)
-    U = torch.linalg.matrix_exp(-1j * H * tau[..., None, None])  # (B, L, 2, 2)
+    u00 = (cos_a - 1j * sinc_a * v_z).to(dtype)
+    u01 = (-sinc_a * (1j * v_x + v_y)).to(dtype)
+    u10 = (-sinc_a * (1j * v_x - v_y)).to(dtype)
+    u11 = (cos_a + 1j * sinc_a * v_z).to(dtype)
+
+    U = torch.stack(
+        [torch.stack([u00, u01], dim=-1),
+         torch.stack([u10, u11], dim=-1)],
+        dim=-2,
+    )  # (B, L, 2, 2)
 
     X = U
     I = torch.eye(2, dtype=dtype, device=device).expand(B, 1, 2, 2)
@@ -239,33 +250,6 @@ def build_SU2_dataset(batch_size=10000, random=False) -> List[torch.Tensor]:
     return rotation_vector, U_input
 
 
-
-def build_X_pi_2_dataset(batch_size=10000) -> List[torch.Tensor]:
-    theta = torch.tensor([math.pi / 2] * batch_size) # polar angle
-    alpha = torch.tensor([0] * batch_size) # azimuthal angle
-    phi = torch.tensor([math.pi / 2] * batch_size) # pi/2 rotation
-
-    # Rotation axis (spherical coordinates)
-    n_x = torch.sin(theta) * torch.cos(phi)
-    n_y = torch.sin(theta) * torch.sin(phi)
-    n_z = torch.cos(theta)
-    n = torch.stack([n_x, n_y, n_z], dim=1)  # (B, 3)
-    
-     # Rotation vector for the function: (n_x, n_y, n_z, alpha)
-    rotation_vector = torch.cat([n, alpha.unsqueeze(1)], dim=1).to(torch.float)  # (B, 4)
-    
-    # Input unitaries
-    X = torch.tensor([[0, 1], [1, 0]], dtype=torch.complex64)
-    Y = torch.tensor([[0, -1j], [1j, 0]], dtype=torch.complex64)
-    Z = torch.tensor([[1, 0], [0, -1]], dtype=torch.complex64)
-    sigma_n = n[:, 0, None, None] * X + n[:, 1, None, None] * Y + n[:, 2, None, None] * Z  # (B, 2, 2)
-    alpha_half = alpha / 2
-    U_input = torch.matrix_exp(-1j * sigma_n * alpha_half[:, None, None])  # (B, 2, 2)
-
-
-    return rotation_vector, U_input
-
-
 ###############################################################################
 # Config loading
 ###############################################################################
@@ -317,8 +301,12 @@ def main():
 
     trainer = UniversalModelTrainer(**trainer_params)
 
-    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=10000, random=True)
-    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
+    # DEBUG
+    # _, train_unitaries = build_SU2_dataset(batch_size=100, random=True)
+    # _, eval_unitaries = build_SU2_dataset(batch_size=20, random=True)
+
+    _, train_unitaries = build_SU2_dataset(batch_size=10000, random=True)
+    _, eval_unitaries = build_SU2_dataset(batch_size=1000, random=True)
 
     # # FOR DEBUGGING
     # train_rotation_vec, train_unitaries = build_X_pi_2_dataset(batch_size=100)
@@ -334,11 +322,14 @@ def main():
     error_params_list = [{"delta_std" : 1.0, "epsilon_std": 0.05}]
     batch_size = 20
 
+    train_unitaries_copy = train_unitaries.clone()
+    eval_unitaries_copy = eval_unitaries.clone()
+
     trainer.train(
-        train_rotation_vec,
-        train_unitaries,
-        eval_rotation_vec,
+        train_unitaries, # use naive C^(2x2) rather than rotation vector for GRAPE NN
+        train_unitaries_copy, # aliasing error
         eval_unitaries,
+        eval_unitaries_copy,
         error_params_list=error_params_list,
         epochs=args.num_epoch,
         save_path=args.save_path,
