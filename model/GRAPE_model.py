@@ -60,13 +60,17 @@ class GRAPE(nn.Module):
         # Initialize neural network parameters for pulse optimization
         L = self.pulse_length * 3
         self.layer = nn.Sequential(
-            nn.Linear(8, L, bias=False),
+            nn.Linear(8, 2*L, bias=False),
             nn.ReLU(),
-            nn.Linear(L, L, bias=False),
+            nn.Linear(2*L, 2*L, bias=False),
             nn.ReLU(),
-            nn.Linear(L, L, bias=False),
+            nn.Linear(2*L, 2*L, bias=False),
             nn.ReLU(),
-            nn.Linear(L, L, bias=False),
+            nn.Linear(2*L, 2*L, bias=False),
+            nn.ReLU(),
+            nn.Linear(2*L, 2*L, bias=False),
+            nn.ReLU(),
+            nn.Linear(2*L, L, bias=False),
             nn.Sigmoid()
         )
 
