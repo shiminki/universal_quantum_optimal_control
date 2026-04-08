@@ -330,8 +330,8 @@ def main():
 
 
     # 5% PLE error'
-    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
-    # error_params_list = [{"delta_std" : 1.0, "epsilon_std": 0.05}]
+    # error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
+    error_params_list = [{"delta_std" : 1.0, "epsilon_std": 0.05}]
     batch_size = 20
 
     trainer.train(

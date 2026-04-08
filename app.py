@@ -403,8 +403,8 @@ def run_fidelity_vs_cutoff(model_option, x_, y_, z_, lambda_raw, Omega, Omega_cu
 
     # Complex control field and its FFT
     Omega_complex = Omega_x_uniform + 1j * Omega_y_uniform
-    spectrum = np.fft.rfft(Omega_complex)
-    freqs_MHz = np.fft.rfftfreq(N_grid, d=dt_u)  # frequencies in MHz (since dt_u is in us)
+    spectrum = np.fft.fft(Omega_complex)
+    freqs_MHz = np.fft.fftfreq(N_grid, d=dt_u)  # frequencies in MHz (since dt_u is in us)
     amplitude_spectrum = np.abs(spectrum) / N_grid  # normalized amplitude
 
     # Plot spectrum
