@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from model.universal_model import UniversalQOCTransformer
+from model.GRAPE_model import GRAPE
 
 
 __all__ = ["CompositePulseTrainer"]
@@ -195,9 +196,12 @@ class UniversalModelTrainer:
                     # Track best model
                     if eval_fid > self.best_fidelity:
                         self.best_fidelity = eval_fid
-                        self.best_state = {
-                            k: v.detach().cpu().clone() for k, v in self.model.state_dict().items()
-                        }
+                        if isinstance(self.model, UniversalQOCTransformer):
+                            self.best_state = {
+                                k: v.detach().cpu().clone() for k, v in self.model.state_dict().items()
+                            }
+                        elif isinstance(self.model, GRAPE):
+                            self.best_state = self.model.get_weights().detach().cpu().clone()
                         # self.best_pulses = self.model(train_set.to(self.device)).detach().cpu()
 
                     pbar.set_postfix({

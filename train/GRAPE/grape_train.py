@@ -276,6 +276,7 @@ def main():
     parser = argparse.ArgumentParser(description="Train composite pulse model")
     parser.add_argument("--num_epoch", type=int, default=1000, help="Number of training epochs")
     parser.add_argument("--save_path", type=str, default="weights/single_qubit_control/weights", help="Path to save model weights")
+    parser.add_argument("--batch_size", type=int, default=16, help="Batch size for training")
     args = parser.parse_args()
 
 
@@ -304,12 +305,12 @@ def main():
     # DEBUG
     # _, train_unitaries = build_SU2_dataset(batch_size=128, random=True)
     # _, eval_unitaries = build_SU2_dataset(batch_size=32, random=True)
-    # batch_size = 16
+
 
     _, train_unitaries = build_SU2_dataset(batch_size=8192, random=True)
     _, eval_unitaries = build_SU2_dataset(batch_size=1024, random=True)
-    batch_size = 256
 
+    batch_size = args.batch_size
     #####################
     ## Training #########
     #####################
