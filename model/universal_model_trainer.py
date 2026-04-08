@@ -114,12 +114,7 @@ class UniversalModelTrainer:
         targets_mc = U_target.repeat_interleave(self.monte_carlo, dim=0)  # (Bm, d, d)
         error = error_distribution(self.monte_carlo * U_target.shape[0]).to(self.device)                   # (Bm, …)
 
-        print("Pulse sample:", pulses_mc[0])
-
         U_out = self.unitary_generator(pulses_mc, error)              # (Bm, d, d)
-
-        print(U_out.shape, targets_mc.shape)
-        print(U_out[:5], targets_mc[:5])
 
 
         mean_fid = self.fidelity_fn(U_out, targets_mc, self.model.num_qubits).mean().item()
