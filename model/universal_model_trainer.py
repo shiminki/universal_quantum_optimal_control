@@ -160,12 +160,12 @@ class UniversalModelTrainer:
         L_train = train_rotation_vec.shape[0]
         L_eval = eval_rotation_vec.shape[0]
         
-        if isinstance(self.model, UniversalQOCTransformer):
-            train_rotation_batch = train_rotation_vec.view(L_train//batch_size,batch_size, 4)
-            eval_rotation_batch = eval_rotation_vec.view(L_eval//batch_size, batch_size, 4)
-        else:
-            train_rotation_batch = train_rotation_vec.view(L_train//batch_size, batch_size, 2, 2)
-            eval_rotation_batch = eval_rotation_vec.view(L_eval//batch_size, batch_size, 2,2 )
+        # if isinstance(self.model, UniversalQOCTransformer):
+        train_rotation_batch = train_rotation_vec.view(L_train//batch_size,batch_size, 4)
+        eval_rotation_batch = eval_rotation_vec.view(L_eval//batch_size, batch_size, 4)
+        # else:
+        #     train_rotation_batch = train_rotation_vec.view(L_train//batch_size, batch_size, 2, 2)
+        #     eval_rotation_batch = eval_rotation_vec.view(L_eval//batch_size, batch_size, 2,2 )
 
         train_target_batch = train_unitaries.view(L_train//batch_size, batch_size, 2, 2)
         eval_target_batch = eval_unitaries.view(L_eval//batch_size, batch_size, 2, 2)

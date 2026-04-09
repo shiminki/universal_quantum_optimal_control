@@ -122,7 +122,8 @@ def compute_pulse_and_unitary(model_option, x_, y_, z_, theta_raw):
             -1j * (n_x * _SIGMA_X_CPU + n_y * _SIGMA_Y_CPU + n_z * _SIGMA_Z_CPU) * theta / 2
         )
 
-        pulse = grape(U.unsqueeze(0)).squeeze(0).detach()
+        # pulse = grape(U.unsqueeze(0)).squeeze(0).detach()
+        pulse = grape(torch.tensor([n_x, n_y, n_z, theta], dtype=torch.float32).unsqueeze(0)).squeeze(0).detach()
 
         print("pulse.shape", pulse.shape)
 

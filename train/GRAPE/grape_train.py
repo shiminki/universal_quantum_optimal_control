@@ -305,12 +305,12 @@ def main():
     trainer = UniversalModelTrainer(**trainer_params)
 
     # DEBUG
-    _, train_unitaries = build_SU2_dataset(batch_size=32, random=True)
-    _, eval_unitaries = build_SU2_dataset(batch_size=8, random=True)
+    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=32, random=True)
+    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=8, random=True)
 
 
-    _, train_unitaries = build_SU2_dataset(batch_size=8192, random=True)
-    _, eval_unitaries = build_SU2_dataset(batch_size=1024, random=True)
+    # train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=8192, random=True)
+    # train_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1024, random=True)
 
     batch_size = args.batch_size
     #####################
@@ -321,22 +321,35 @@ def main():
     # 5% PLE error'
     error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
     # error_params_list = [{"delta_std" : 1.0, "epsilon_std": 0.05}]
-    
-
-    train_unitaries_copy = train_unitaries.clone()
-    eval_unitaries_copy = eval_unitaries.clone()
 
     trainer.train(
-        train_unitaries, # use naive C^(2x2) rather than rotation vector for GRAPE NN
-        train_unitaries_copy, # aliasing error
+        train_rotation_vec, # use naive C^(2x2) rather than rotation vector for GRAPE NN
+        train_unitaries, # aliasing error
+        eval_rotation_vec,
         eval_unitaries,
-        eval_unitaries_copy,
         error_params_list=error_params_list,
         epochs=args.num_epoch,
         save_path=args.save_path,
         plot=True,
         batch_size=batch_size
     )
+
+    
+
+    # train_unitaries_copy = train_unitaries.clone()
+    # eval_unitaries_copy = eval_unitaries.clone()
+
+    # trainer.train(
+    #     train_unitaries, # use naive C^(2x2) rather than rotation vector for GRAPE NN
+    #     train_unitaries_copy, # aliasing error
+    #     eval_unitaries,
+    #     eval_unitaries_copy,
+    #     error_params_list=error_params_list,
+    #     epochs=args.num_epoch,
+    #     save_path=args.save_path,
+    #     plot=True,
+    #     batch_size=batch_size
+    # )
 
 
 if __name__ == "__main__":
