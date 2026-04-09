@@ -101,7 +101,7 @@ class GRAPE(nn.Module):
 
         pulses[:, :, -1] = F.relu(pulses[:, :, -1])
 
-        print(f"Average pulse duration: {pulses[:, :, -1].mean().item():.4f} (range: {pulses[:, :, -1].min().item():.4f} to {pulses[:, :, -1].max().item():.4f})")
+        # print(f"Average pulse duration: {pulses[:, :, -1].mean().item():.4f} (range: {pulses[:, :, -1].min().item():.4f} to {pulses[:, :, -1].max().item():.4f})")
 
         return pulses
 # 
