@@ -27,7 +27,7 @@ class UniversalModelTrainer:
     def __init__(
         self,
         # model: Union[CompositePulseTransformerDecoder, CompositePulseTransformerEncoder],
-        model: UniversalQOCTransformer,
+        model: UniversalQOCTransformer | GRAPE,
         unitary_generator: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
         error_sampler: Callable[[int], torch.Tensor],
         *,
@@ -160,9 +160,14 @@ class UniversalModelTrainer:
         L_train = train_rotation_vec.shape[0]
         L_eval = eval_rotation_vec.shape[0]
         
-        train_rotation_batch = train_rotation_vec.view(L_train//batch_size,batch_size, 4)
+        if isinstance(self.model, UniversalQOCTransformer):
+            train_rotation_batch = train_rotation_vec.view(L_train//batch_size,batch_size, 4)
+            eval_rotation_batch = eval_rotation_vec.view(L_eval//batch_size, batch_size, 4)
+        else:
+            train_rotation_batch = train_rotation_vec.view(L_train//batch_size, batch_size, 2, 2)
+            eval_rotation_batch = eval_rotation_vec.view(L_eval//batch_size, batch_size, 2,2 )
+
         train_target_batch = train_unitaries.view(L_train//batch_size, batch_size, 2, 2)
-        eval_rotation_batch = eval_rotation_vec.view(L_eval//batch_size, batch_size, 4)
         eval_target_batch = eval_unitaries.view(L_eval//batch_size, batch_size, 2, 2)
 
         # for i, x in enumerate(train_iter):

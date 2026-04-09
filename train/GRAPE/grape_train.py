@@ -303,8 +303,8 @@ def main():
     trainer = UniversalModelTrainer(**trainer_params)
 
     # DEBUG
-    # _, train_unitaries = build_SU2_dataset(batch_size=128, random=True)
-    # _, eval_unitaries = build_SU2_dataset(batch_size=32, random=True)
+    _, train_unitaries = build_SU2_dataset(batch_size=32, random=True)
+    _, eval_unitaries = build_SU2_dataset(batch_size=8, random=True)
 
 
     _, train_unitaries = build_SU2_dataset(batch_size=8192, random=True)
