@@ -330,6 +330,8 @@ def main():
     trainer.train(
         train_rotation_vec,
         train_unitaries,
+        # train_rotation_vec,
+        # train_unitaries,
         eval_rotation_vec,
         eval_unitaries,
         error_params_list=error_params_list,

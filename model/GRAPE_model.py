@@ -84,21 +84,7 @@ class GRAPE(nn.Module):
         # Apply the GRAPE optimization logic here
         B = rotation_vector.shape[0]  # batch size
 
-        pulse_norm = self.layer(rotation_vector)  # shape: (B, L * 3)
-        pulse_norm = pulse_norm.reshape(B, self.pulse_length, 3) # (B, L, 3)
-
-        # Normalize the pulse parameters to their respective ranges
-        pulse_norm = pulse_norm.sigmoid() # [ux, uy, tau] in (0, 1)
-        phi = torch.atan2(pulse_norm[:, :, 1], pulse_norm[:, :, 0])
-        tau = pulse_norm[:, :, 2]
-        pulses_unit = torch.stack((phi, tau), dim=-1) # shape: (B, L, 2
-        low = self.param_ranges[:, 0].to(pulses_unit.device)
-        high = self.param_ranges[:, 1].to(pulses_unit.device)
-
-        pulses = low + (high - low) * pulses_unit  # shape: (B, L, P)
-
-
-        phi_input = torch.atan2(rotation_vector[:, 1], rotation_vector[:, 0])  # atan2(n_y, n_x)
+        phi_0 = torch.atan2(rotation_vector[:, 1], rotation_vector[:, 0])  # atan2(n_y, n_x)
 
         # rotation_vector_rescaled: shape (B, 4) – target rotation axis and angle in the form of (n_xy, 0, n_z, theta).
         rotation_vector_rescaled = torch.stack([
@@ -108,64 +94,25 @@ class GRAPE(nn.Module):
             rotation_vector[:, 3]  # theta 
         ], dim=1)
 
+        pulse_norm = self.layer(rotation_vector_rescaled)  # shape: (B, L * 3)
+        pulse_norm = pulse_norm.reshape(B, self.pulse_length, 3) # (B, L, 3)
 
-        base_pulse = GRAPE.get_base_pulse(rotation_vector_rescaled)  # shape: (B, L, 2)
+        # Normalize the pulse parameters to their respective ranges
+        pulse_norm = pulse_norm.sigmoid() # [ux, uy, tau] in (0, 1)
+        phi = torch.atan2(pulse_norm[:, :, 1], pulse_norm[:, :, 0]) + phi_0.unsqueeze(1) # shape: (B, L)
+        tau = pulse_norm[:, :, 2]
 
-        # Reshape base_pulse to (B, self.pulse_length, 2)
-        n = self.pulse_length // 9
-        m = self.pulse_length - 9 * n
-        B = base_pulse.shape[0]
+        pulses_unit = torch.stack((phi, tau), dim=-1) # shape: (B, L, 2
+        low = self.param_ranges[:, 0].to(pulses_unit.device)
+        high = self.param_ranges[:, 1].to(pulses_unit.device)
 
-        # Repeat each (phi, theta) n times, dividing theta by n
-        expanded = []
-        for i in range(9):
-            phi = base_pulse[:, i, 0] + phi_input  # (B,)
-            theta = base_pulse[:, i, 1]  # (B,)
-            # Create (B, n, 2): repeat phi, theta/n n times
-            block = torch.stack([
-                phi.repeat_interleave(n).reshape(B, n),
-                (theta / n).repeat_interleave(n).reshape(B, n)
-            ], dim=-1)  # (B, n, 2)
-            expanded.append(block)
-        base_pulse_expanded = torch.cat(expanded, dim=1)  # (B, 9*n, 2)
+        pulses = low + (high - low) * pulses_unit  # shape: (B, L, P)
 
-        # Pad with m items of (0, 0) if needed
-        if m > 0:
-            pad = torch.zeros((B, m, 2), dtype=base_pulse.dtype, device=base_pulse.device)
-            base_pulse_expanded = torch.cat([base_pulse_expanded, pad], dim=1)  # (B, self.pulse_length, 2)
-
-        base_pulse = base_pulse_expanded  # (B, self.pulse_length, 2)
-
-        pulses = base_pulse + pulses  # shape: (B, L, 2)
-        # pulses = base_pulse
 
         pulses[:, :, -1] = F.relu(pulses[:, :, -1])
 
         return pulses
     
-
-    @staticmethod
-    def get_base_pulse(rotation_vector: torch.Tensor) -> torch.Tensor:
-        """
-        Returns the base pulse for a given rotation vector.
-        The base pulse is a fixed sequence of pulses designed to achieve a specific rotation.
-        
-        Args:
-            rotation_vector: shape (B, 4) – target rotation axis and angle in the form of (n_x, n_y, n_z, theta).
-        
-        Returns:
-            Base pulse tensor of shape (B, L, 2).
-        """
-        # For simplicity, we return a fixed base pulse here.
-        # In practice, this could be more complex based on the rotation_vector.
-        B = rotation_vector.shape[0]
-        # Base pulse from YXY + SCORE
-
-        euler_angles = GRAPE.euler_yxy_from_rotation_vector(rotation_vector)  # (B, 3)
-        score_sequence = GRAPE.score_sequence_from_yxy(euler_angles) # (B, L, 2, 2)
-        return score_sequence.to(rotation_vector.device, rotation_vector.dtype)  # (B, L, 2)
-    
-
 
     @staticmethod
     def rotation_unitary(n: torch.Tensor,
