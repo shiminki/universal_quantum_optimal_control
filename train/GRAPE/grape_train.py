@@ -274,7 +274,7 @@ def load_model_params(json_path: str) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="Train composite pulse model")
-    parser.add_argument("--num_epoch", type=int, default=1000, help="Number of training epochs")
+    parser.add_argument("--num_epoch", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--save_path", type=str, default="weights/single_qubit_control/weights", help="Path to save model weights")
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size for training")
     args = parser.parse_args()
@@ -317,8 +317,8 @@ def main():
 
 
     # 5% PLE error'
-    # error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
-    error_params_list = [{"delta_std" : 1.0, "epsilon_std": 0.05}]
+    error_params_list = [{"delta_std" : delta_std, "epsilon_std": 0.05} for delta_std in torch.arange(0.4, 1.05, 0.3)]
+    # error_params_list = [{"delta_std" : 1.0, "epsilon_std": 0.05}]
     
 
     train_unitaries_copy = train_unitaries.clone()
