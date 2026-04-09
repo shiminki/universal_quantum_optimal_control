@@ -283,6 +283,8 @@ def main():
     # Load model parameters from external JSON
     model_params = load_model_params("train/GRAPE/model_params.json")
 
+    print(f"Model parameters: {model_params}")
+
     # CHOOSE MODEL
     # model = GRAPE_finetune_X_pi_2(**model_params)
     model = GRAPE(**model_params)
