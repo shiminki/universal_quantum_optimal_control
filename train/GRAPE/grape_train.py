@@ -305,12 +305,12 @@ def main():
     trainer = UniversalModelTrainer(**trainer_params)
 
     # DEBUG
-    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=64, random=False)
-    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=16, random=False)
+    # train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=64, random=False)
+    # eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=16, random=False)
 
 
-    # train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=8192, random=True)
-    # eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1024, random=True)
+    train_rotation_vec, train_unitaries = build_SU2_dataset(batch_size=8192, random=True)
+    eval_rotation_vec, eval_unitaries = build_SU2_dataset(batch_size=1024, random=True)
 
     batch_size = args.batch_size
     #####################
