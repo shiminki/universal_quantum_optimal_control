@@ -1,0 +1,32 @@
+model:
+  type: transformer
+  num_qubits: 1
+  pulse_space:
+    phi: [-3.15, 3.15]
+    tau: [0.1, 0.5]
+  max_pulses: 100
+  d_model: 512
+  n_layers: 8
+  n_heads: 16
+  dropout: 0.1
+  finetune: null
+
+training:
+  batch_size: 200
+  epochs: 50
+  monte_carlo: 1000
+  learning_rate: 3.0e-5
+  grad_clip: 1.0
+  loss: sharp
+  error_sampler: ore_ple
+  curriculum:
+    - {delta_std: 0.4, epsilon_std: 0.05}
+    - {delta_std: 0.7, epsilon_std: 0.05}
+    - {delta_std: 1.0, epsilon_std: 0.05}
+
+dataset:
+  train_size: 10000
+  eval_size: 1000
+  random: true
+
+seed: 0

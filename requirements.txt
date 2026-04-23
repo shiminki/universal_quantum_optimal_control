@@ -1,13 +1,14 @@
-torch
+torch>=2.0
+numpy
+pyyaml
 tqdm
 matplotlib
 pandas
+# Plotting extras (install with: pip install -e .[viz])
 pwlf
-numpy
-streamlit
 qutip
-ffmpeg
+# Gradio demo extras (install with: pip install -e .[app])
 gradio
-ffmpeg-python
+huggingface_hub
 imageio
 imageio-ffmpeg

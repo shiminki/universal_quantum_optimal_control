@@ -1,145 +1,105 @@
 # Robust Quantum Control with Composite Pulse Sequences
 
-This project develops a machine learning framework for generating composite pulse sequences that implement a target quantum operation with high fidelity. It is specifically aimed to create pulses that are robust under strong static disorder (e.g., off-resonant errors). It leverages a transformer encoder model to output pulse sequences robust to errors sampled from a given distribution.
+Neural-network controllers that output composite `(phi, tau)` pulse sequences
+implementing a target SU(2) gate, optimised for robustness to static disorder
+(off-resonant detuning + pulse-length error).
 
----
+Two controller families share the same training/evaluation stack:
 
-## 🧠 Objective and Problem Formulation
+* **`TransformerController`** — transformer encoder over SCORE-embedded Euler
+  decomposition of the target, projected to a length-`max_pulses` sequence.
+* **`DeepNNController`** — dense MLP directly mapping a reduced rotation vector
+  to `num_pulses` pulse parameters.
 
-### Goal
+## Problem
 
+Target unitary `U_target ∈ SU(2)`. Static errors
+`ε = (δ, ε) ~ p(·|Σ)` perturb the control Hamiltonian
+`H(t) = 0.5·(1+ε)·(cos φ X + sin φ Y + δ Z)`.
+A controller `f(U_target; θ)` emits a pulse sequence, and the propagator
+`U_out = U_L ⋯ U_1` is compared to the target. Training maximises the
+Haar-averaged entanglement fidelity across a curriculum of increasing disorder:
 
-Implement a target quantum unitary $U_{\text{target}} \in SU(2)$ using an optimal phase control sequence $\phi_c(t)$, where the resulting unitary $U_{\text{out}}$ is robust against a static error $\vec{\epsilon} \sim p_{\vec{\epsilon}}(\cdot |\vec{\Sigma})$. The primary objective is to optimize composite pulse sequence for a **large** disorder.
-
-
-### Problem Input:
-
-* Target unitary $U_{\text{target}} \in SU(2)$
-* Static error model $\vec{\epsilon} \sim p_{\vec{\epsilon}}(\cdot |\vec{\Sigma})$ where $\vec{\Sigma}$ quantifies the standard deviation.
-* Unitary generator $U_{\text{out}} \leftarrow g(p, \vec{\epsilon})$ that creates the unitary from pulse $p \in \mathcal{P}$ with error $\vec{\epsilon}$. 
-
-### Problem Output:
-
-* Length L piecewise linear phase control $\phi_c(t) = [\phi_i, \tau_i]_{i = 1}^L$. Control hamiltonian is $H[\phi] = \frac{1}{2}[\cos\phi \cdot X + \sin\phi Y]$
-
-### Objective:
-
-Maximize expected fidelity:
-
-```math
-\mathbb{E}_{\vec{\epsilon} \sim p(\cdot |\vec{\Sigma})}\left[ \frac{\left| \text{Tr}(U_{\text{out}}^{\dagger} U_{\text{target}}) \right|^2 + 2}{6}\right]
+```
+    F = E_ε[ (|Tr(U_out† U_target)|² + d) / (d(d+1)) ]
 ```
 
-where 
-```math
-U_{\text{out}} = U_L \cdots U_1 \text{ and } U_i = \text{unitary\_generator}([\phi_i, \tau_i], \vec{\epsilon})
+## Layout
+
+```
+src/uqoc/
+  quantum.py          Paulis (cached), rotation_unitary, Y-X-Y Euler, SCORE, fidelity
+  propagator.py       Closed-form (B, L, 2) → (B, 2, 2) log-depth composite
+  errors.py           ORE / ORE+PLE samplers (registered by name)
+  fidelity.py         {neg_log, infidelity, sharp} losses (registered by name)
+  dataset.py          Random/grid SU(2) target sampler
+  config.py           YAML → dataclass
+  utils.py            set_seed, default_device
+  models/
+    base.py           BaseController + MODEL_REGISTRY
+    transformer.py    TransformerController
+    deep_nn.py        DeepNNController
+  pipeline.py         Inference wrapper (rotation vec or unitary)
+  trainer.py          Curriculum Monte-Carlo trainer (model-agnostic)
+
+scripts/
+  train.py            python scripts/train.py --config configs/x.yaml --save-dir outputs/x
+  evaluate.py         python scripts/evaluate.py --config ... --checkpoint ...
+  app.py              Gradio demo (loads HF weights by default)
+
+configs/              YAML run configs
+demo_universal/
+  weight/*.pt         Pretrained checkpoints
+  config/*.yaml       Matching architecture definitions
+
+visualize/
+  plots.py            Fidelity contour, pulse-param, fidelity-vs-std
+  bloch_video.py      Bloch-sphere ensemble evolution animation
+
+baselines/
+  true_grape.py       Direct-parameter GRAPE (nn.Parameter, single target)
+
+smoothing/            Low-pass filter for hardware-constrained pulses
+tests/                pytest suite
 ```
 
-A transformer encoder model $f(U_{\text{target}}; \Theta)$ is trained to generate the pulse sequence.
-
-
-### Optimization Code:
-
-The code utilizes an RL framework, where the environment is the error distribution, agent is the transformer model, and the action space is the pulse sequence. The following diagram is how the training code optimizes the fidelity (reward)
-
-<p align="center">
-  <img src="assets/training objective.png"  alt="training objective">
-</p>
-
-The key intuition for this project is to iteratively train the model from low to large disorder, which is known as curriculum learning in RL. The following is a pseudocode for model training
-
-```{r, eval = FALSE}
-train(unitary_generator, error_distribution, U_target):
-    theta <- initial model parameter
-    for error_param from small to large:
-        - for each epoch
-            - pulses <- f(U_target; theta) # model output
-            - error <- error_distribution(error_param) # error
-            - U_out <- unitary_generator(pulses, error)
-            - loss_fn <- -log(E[fidelity(U_out, U_target)])
-            - theta <- theta - eta * \partial_\theta loss_fn
-```
-
----
-
-## 📁 Codebase Structure
-
-This repository is organized into the following key directories:
-
-### `model/`
-
-Contains the core machine learning logic for composite pulse sequence generation:
-
-* `universal_model.py`: Defines the Transformer-based model architecture for generating universal optimal control for SU(2) gate
-* `universaltrainer.py`: Implements the training loop and optimization logic for model learning.
-
-### `demo_universal/`
-
-Stores pretrained model weights and the optimized pulse sequences:
-
-* Use these files for direct inference without retraining.
-* Includes sample pulse outputs in csv format.
-
-### `train/`
-
-Contains training scripts tailored to specific quantum systems:
-
-* `single_qubit_phase_control_only/`: Scripts for training on single-qubit target unitaries. Pulse Sequence is series of resonant pulses.
-* `two_qubit/`: Scripts for training on two-qubit operations (e.g., entangling gates).
-
-You can configure the model and training settings via the `model_params.json` file in each subfolder.
-
-### `visualize/`
-
-Includes visualization utilities:
-
-* Use these scripts to plot and analyze the learned composite pulse sequences.
-* Helpful for inspecting fidelity contours, pulse robustness, and system behavior under error.
-
----
-
-To get started, run a training script under `train/`, or load a pretrained model from `weights/` and use the visualization tools to analyze performance.
-
-
-## 🚀 Getting Started
-
-1. Install dependencies:
+## Install
 
 ```bash
-pip install -r requirements.txt
+pip install -e .              # core
+pip install -e .[viz]         # + plotting (pwlf, qutip)
+pip install -e .[app]         # + Gradio UI + HuggingFace
+pip install -e .[dev]         # + pytest
 ```
 
-2. Run training:
+## Train
 
 ```bash
-python train/single_qubit_phase_only/single_qubit_phase_control.py --num_epoch [num_epoch] --save_path [save_path]
+python scripts/train.py --config configs/transformer_len100.yaml \
+                        --save-dir outputs/transformer_len100
 ```
 
-* For pre-training, set "finetuning" to false. Otherwise, pretrained single-qubit control pulse is saved as "combined.pt"
+Configs pick the model, loss, error sampler, and curriculum. To add a new
+controller, subclass `BaseController`, decorate with `@register("my_name")`,
+and reference it in a YAML `model.type`.
 
----
+## Evaluate / inspect
 
-## 📌 Notes
+```bash
+# Mean fidelity under the training curriculum
+python scripts/evaluate.py --config configs/transformer_len100.yaml \
+                           --checkpoint outputs/transformer_len100/err_delta_std1.000_epsilon_std0.050.pt
 
-* Supports general $n$-qubit systems
-* Pulse space $\mathcal{P}$ can be continuous (e.g., $\phi, t$)
-* Custom loss is used such that it has zero gradient at $F = 1$ and sharp gradient at $F < 0.99$. The loss function is 
+# Interactive Gradio demo (pulls weights from HuggingFace)
+python scripts/app.py
+```
 
-$$L(F; \tau=0.99, k=100) = \log(1 + \exp(-k \cdot (F - \tau))\cdot (1 - F)$$
+## Tests
 
----
+```bash
+pytest tests/ -q
+```
 
+## License
 
----
-models:
-  - shiminki/universal_qoc_weights
----
-
-
-## 📄 License
-
-MIT License
-
-## ✏️ Citation
-
-If you use this work in academic research or teaching, please cite appropriately.
+MIT.

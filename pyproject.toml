@@ -1,0 +1,29 @@
+[project]
+name = "uqoc"
+version = "0.1.0"
+description = "Neural-network controllers for disorder-robust single-qubit gates."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0",
+    "numpy",
+    "pyyaml",
+    "tqdm",
+    "matplotlib",
+    "pandas",
+]
+
+[project.optional-dependencies]
+viz = ["pwlf", "qutip"]
+app = ["gradio", "huggingface_hub"]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
