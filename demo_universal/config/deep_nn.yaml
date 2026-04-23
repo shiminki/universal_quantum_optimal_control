@@ -1,0 +1,6 @@
+model:
+  type: deep_nn
+  pulse_space: {phi: [-3.15, 3.15], tau: [0.01, 0.5]}
+  num_pulses: 400
+  hidden_mult: 6
+  n_layers: 6

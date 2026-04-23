@@ -1,23 +1,27 @@
-__pycache__
-.pytest_cache
-test
-test.py
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+src/*.egg-info/
+.pytest_cache/
+.mypy_cache/
+build/
+dist/
+
+# Editor / OS
+.vscode/
 .DS_Store
-.DS_Store
-evaluate.py
-.gitignore
-pulse_visualize.ipynb
-.vscode
-Old Files
-figures
-pulse_analysis
-weights
-demo/dump
-demo_outputs
-.gradio
-.devcontainer
-dcrab_best_params.npz
-old
-figures.ipynb
-ore_fidelity.csv
-smoothing
+.devcontainer/
+
+# Ephemeral outputs
+figures/
+weights/
+demo_outputs/
+.gradio/
+outputs/
+
+# Ad-hoc user data
+notebooks/scratch/
+*.log
+
+pca/
