@@ -9,6 +9,12 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
+
+# Allow running without `pip install -e .` (e.g. Google Colab)
+_src = Path(__file__).resolve().parents[1] / "src"
+if str(_src) not in sys.path:
+    sys.path.insert(0, str(_src))
 
 from uqoc.config import load_config
 from uqoc.dataset import build_SU2_dataset
