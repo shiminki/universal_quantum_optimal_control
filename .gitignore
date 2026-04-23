@@ -23,3 +23,5 @@ outputs/
 # Ad-hoc user data
 notebooks/scratch/
 *.log
+
+pca/
