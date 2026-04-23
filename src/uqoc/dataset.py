@@ -23,9 +23,10 @@ def build_SU2_dataset(size: int, random: bool = True,
         U_target        : (size, 2, 2) complex tensor
     """
     if random:
-        theta = torch.rand(size) * math.pi
-        alpha = torch.rand(size) * 2 * math.pi
-        phi = torch.rand(size) * 2 * math.pi
+        EPS = 0.01  # want to sample exactly 0 or pi / 2 pi with nonzero probability
+        theta = (torch.rand(size) * (1 + 2 * EPS) - EPS) * math.pi
+        alpha = (torch.rand(size) * (1 + 2 * EPS) - EPS) * 2 * math.pi
+        phi = (torch.rand(size) * (1 + 2 * EPS) - EPS) * 2 * math.pi
     else:
         B = int(math.sqrt(size))
         if B * B != size:
