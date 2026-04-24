@@ -28,7 +28,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", required=True, type=Path)
     parser.add_argument("--device", default=None)
     parser.add_argument("--monte-carlo", type=int, default=2000)
-    parser.add_argument("--eval-size", type=int, default=1000)
+    parser.add_argument("--eval-size", type=int, default=1024)
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -49,8 +49,10 @@ def main() -> None:
         err = sampler(args.monte_carlo * rot_vec.shape[0]).to(device)
         with torch.no_grad():
             U_out = batched_unitary_generator(pulses_mc, err)
-            F = fidelity(U_out, U_mc, model.num_qubits).mean().item()
-        print(f"  {params} → F = {F:.6f}")
+            fidelity_list = fidelity(U_out, U_mc, model.num_qubits)
+            F = fidelity_list.mean().item()
+            F_min = fidelity_list.min().item()
+        print(f"  {params} → F = {F:.6f}, F_min = {F_min:.6f}")
 
 
 if __name__ == "__main__":

@@ -27,6 +27,6 @@ training:
 dataset:
   train_size: 16384
   eval_size: 1024
-  random: true
+  random: false
 
 seed: 0
