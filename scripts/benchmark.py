@@ -3,6 +3,16 @@
 Each entry is a label:config:checkpoint triple. For every entry the script
 measures pulse duration statistics and computes entanglement fidelity.
 Results are printed as a table and saved as a Matplotlib figure.
+
+
+Example usage:
+python scripts/benchmark.py \
+        --entry "len35:configs/transformer_len35.yaml:weights/len35.pt" \
+        --entry "len50:configs/transformer_len50.yaml:weights/len50.pt" \
+        --entry "len100:configs/transformer_len100.yaml:demo_universal/weight/length_100.pt" \
+        --entry "len200:configs/transformer_len200.yaml:weights/len200.pt" \
+        --entry "len400:configs/transformer_len400.yaml:demo_universal/weight/length_400.pt" \
+        --out figures/benchmark.png
 """
 
 from __future__ import annotations
@@ -110,12 +120,12 @@ def _plot(results: list[dict], out: Path) -> None:
     std_upper = [m + s for m, s in zip(f_mean, f_std)]
     ax.fill_between(dur_avg, std_lower, std_upper, alpha=0.15, color="steelblue", zorder=2)
 
-    for r, xv, yv in zip(labels, dur_avg, f_mean):
-        ax.annotate(r, (xv, yv), textcoords="offset points", xytext=(5, 5),
-                    fontsize=9, color="steelblue", fontweight='bold')
+    # for r, xv, yv in zip(labels, dur_avg, f_mean):
+    #     ax.annotate(r, (xv, yv), textcoords="offset points", xytext=(5, 5),
+    #                 fontsize=9, color="steelblue", fontweight='bold')
 
     ax.set_xlabel("Average Pulse Duration ($\pi$)")
-    ax.set_ylabel("Entanglement Fidelity")
+    ax.set_ylabel("Gate Fidelity")
     ax.set_title("Pulse Duration vs. Fidelity Performance")
     ax.legend(loc="lower right")
     ax.grid(True, alpha=0.3)

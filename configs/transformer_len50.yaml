@@ -3,7 +3,7 @@ model:
   num_qubits: 1
   pulse_space:
     phi: [-3.15, 3.15]
-    tau: [0.1, 0.5]
+    tau: [0.1, 0.4]
   max_pulses: 50
   d_model: 512
   n_layers: 8
@@ -13,8 +13,8 @@ model:
 
 training:
   batch_size: 512
-  epochs: 50
-  monte_carlo: 1000
+  epochs: 100
+  monte_carlo: 1024
   learning_rate: 3.0e-5
   grad_clip: 1.0
   loss: sharp

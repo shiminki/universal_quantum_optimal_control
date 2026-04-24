@@ -32,11 +32,11 @@ def build_SU2_dataset(size: int, random: bool = True,
         if B * B != size:
             raise ValueError(f"grid mode needs a perfect square size; got {size}")
         theta_grid = torch.linspace(0, math.pi, B)
-        phi_grid = torch.linspace(0, 2 * math.pi, B)
-        theta, phi = torch.meshgrid(theta_grid, phi_grid, indexing='ij')
+        alpha_grid = torch.linspace(0, 2 * math.pi, B)
+        theta, alpha = torch.meshgrid(theta_grid, alpha_grid, indexing='ij')
         theta = theta.flatten()
-        phi = phi.flatten()
-        alpha = torch.rand(B * B) * 2 * math.pi
+        alpha = alpha.flatten()
+        phi = torch.rand(B * B) * 2 * math.pi # model is invariant w.r.t phi
 
     n_x = torch.sin(theta) * torch.cos(phi)
     n_y = torch.sin(theta) * torch.sin(phi)
