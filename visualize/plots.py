@@ -71,15 +71,18 @@ def fidelity_contour_plot(target_name: str, U_target: torch.Tensor, pulse: torch
         ORE_np *= Omega
         PLE_np *= Omega
         x_label = r"$\delta$ (2$\pi$ MHz)"
-        y_label = r"$\epsilon$ (2$\pi$ MHz)"
+        y_label = r"$\epsilon$"
 
     plt.figure(figsize=(18, 14))
     contour = plt.contourf(ORE_np, PLE_np, F_np,
                            levels=[0.8, 0.9, 0.95, 0.97, 0.98, 0.99, 0.999, 1.0], cmap='viridis')
     plt.contour(ORE_np, PLE_np, F_np, levels=[0.95, 0.99, 0.999], colors='white', linewidths=1.5)
-    plt.colorbar(contour, label='Fidelity')
+    cbar = plt.colorbar(contour)
+    cbar.set_label('Fidelity', fontsize=24)
+    cbar.ax.tick_params(labelsize=20)
     plt.xlabel(x_label, fontsize=24)
     plt.ylabel(y_label, fontsize=24)
+    plt.xticks(fontsize=20); plt.yticks(fontsize=20)
     plt.title(title, fontsize=32)
     plt.grid(True)
 

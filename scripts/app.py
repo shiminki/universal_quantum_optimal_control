@@ -10,6 +10,7 @@ import argparse
 import glob
 import math
 import os
+import sys
 
 import gradio as gr
 import matplotlib
@@ -17,8 +18,17 @@ import numpy as np
 import pandas as pd
 import torch
 
+from pathlib import Path
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+# Allow running without `pip install -e .` (e.g. Google Colab)
+_root = Path(__file__).resolve().parents[1]
+_src = _root / "src"
+for _p in (_src, _root):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 from uqoc.config import load_config
 from uqoc.fidelity import fidelity
@@ -38,6 +48,10 @@ from visualize import (
 WEIGHTS_REPO = os.getenv("WEIGHTS_REPO", "shiminki/universal_qoc_weights")
 
 MODELS = {
+    "35 length":  {"config": "configs/transformer_len35.yaml",
+                   "local": "weights/len35.pt",
+                   "hf_name": "len35.pt",
+                   "display": "transformer_len35"},
     "100 length": {"config": "demo_universal/config/length_100.yaml",
                    "local": "demo_universal/weight/length_100.pt",
                    "hf_name": "length_100.pt",
@@ -172,20 +186,26 @@ def _cb_evolution(key, x, y, z, th, Omega):
     for eps, delt in zip(epsilons, deltas):
         psi = PSI_INIT
         bv, pi = [], []
-        for _, phi_k, tau_k, _ in df.itertuples():
+        for _, tau_k, H_x_k, H_y_k, _ in df.itertuples():
+            phi_k = math.atan2(H_y_k, H_x_k)
+            tau_rad = tau_k * 2 * math.pi * Omega
             err = torch.tensor([[delt], [eps]], dtype=torch.float32)
             single = pulse[[0], :].clone()
-            single[0, 0], single[0, 1] = phi_k, tau_k * 2 * math.pi * Omega
+            single[0, 0], single[0, 1] = phi_k, tau_rad
             step_U = batched_unitary_generator(single.unsqueeze(1), err).squeeze(0)
             psi = step_U @ psi
             bv.append(spinor_to_bloch(psi))
-            pi.append((0, float(phi_k), float(tau_k)))
+            pi.append((0, float(phi_k), float(tau_rad)))
         bloch_list.append(np.vstack(([spinor_to_bloch(PSI_INIT)], bv)))
         pulse_info_list.append(pi)
         fidelity_list.append(float(abs(torch.vdot(target_psi, psi)) ** 2))
 
+    # animate_multi_error_bloch(bloch_list, pulse_info_list, fidelity_list,
+    #                           deltas, epsilons, name=f"Ensemble Evolution of {target_name}",
+    #                           save_path=vid, phase_only=True, Omega=Omega)
+
     animate_multi_error_bloch(bloch_list, pulse_info_list, fidelity_list,
-                              deltas, epsilons, name=f"Ensemble Evolution of {target_name}",
+                              deltas, epsilons, name="",
                               save_path=vid, phase_only=True, Omega=Omega)
     return vid, [vid]
 

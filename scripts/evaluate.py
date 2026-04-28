@@ -1,8 +1,8 @@
 """Load a checkpoint and compute mean fidelity on a freshly sampled eval set.
 
 Usage:
-    python scripts/evaluate.py --config configs/transformer_len100.yaml \\
-                               --checkpoint weights/len100/err_delta_std1.000_epsilon_std0.050.pt
+    python scripts/evaluate.py --config configs/transformer_len70.yaml \
+                               --checkpoint checkpoint/len70.pt
 """
 
 from __future__ import annotations

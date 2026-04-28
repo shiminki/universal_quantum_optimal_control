@@ -10,8 +10,8 @@ import torch
 from .quantum import rotation_vector_to_unitary
 
 
-def build_SU2_dataset(size: int, random: bool = True,
-                      device: torch.device | str = "cpu") -> Tuple[torch.Tensor, torch.Tensor]:
+def build_SU2_dataset(size: int, random: bool = True, device: torch.device | str = "cpu", 
+                      specific_target: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
     """Sample target SU(2) gates.
 
     Args:
@@ -22,6 +22,22 @@ def build_SU2_dataset(size: int, random: bool = True,
         rotation_vector : (size, 4) real tensor (n_x, n_y, n_z, θ)
         U_target        : (size, 2, 2) complex tensor
     """
+    if specific_target:
+        # Define specific rotation vectors for the 5 target gates
+        # Format: [n_x, n_y, n_z, alpha]
+        rotation_vectors = [
+            [1.0, 0.0, 0.0, math.pi],          # R_x(π)
+            [1.0, 0.0, 0.0, math.pi / 2],      # R_x(π/2)
+            [1.0, 0.0, 0.0, math.pi / 4],      # R_x(π/4)
+            [1/math.sqrt(2), 0.0, 1/math.sqrt(2), math.pi - 0.01],  # H (rotation by π around (x+z)/√2)
+            [0.0, 0.0, 1.0, math.pi / 4],      # T = R_z(π/4)
+        ]
+        
+        rotation_vector = torch.tensor(rotation_vectors, dtype=torch.float, device=device)
+        U_target = rotation_vector_to_unitary(rotation_vector).to(torch.complex64)
+        
+        return rotation_vector, U_target
+    
     if random:
         EPS = 0.01  # want to sample exactly 0 or pi / 2 pi with nonzero probability
         theta = (torch.rand(size) * (1 + 2 * EPS) - EPS) * math.pi

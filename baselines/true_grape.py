@@ -6,7 +6,7 @@ network conditioned on the target, this baseline optimises a single
 time. No generalisation across SU(2); this is the textbook GRAPE setup.
 
 Usage:
-    python -m baselines.true_grape --target X --num-pulses 100 --epochs 2000
+    python -m baselines.true_grape --target X --num-pulses 400 --epochs 12000
 """
 
 from __future__ import annotations
@@ -18,6 +18,16 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+import sys
+
+# Allow running without `pip install -e .` (e.g. Google Colab)
+_src = Path(__file__).resolve().parents[1] / "src"
+if str(_src) not in sys.path:
+    sys.path.insert(0, str(_src))
 
 from uqoc.errors import make_sampler
 from uqoc.fidelity import LOSS_REGISTRY, fidelity
@@ -57,12 +67,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", choices=list(TARGETS), default="X")
     parser.add_argument("--num-pulses", type=int, default=100)
-    parser.add_argument("--epochs", type=int, default=2000)
+    parser.add_argument("--epochs", type=int, default=8000)
     parser.add_argument("--monte-carlo", type=int, default=256)
-    parser.add_argument("--delta-std", type=float, default=0.4)
+    parser.add_argument("--delta-std", type=float, default=1.0)
     parser.add_argument("--epsilon-std", type=float, default=0.05)
     parser.add_argument("--lr", type=float, default=1e-2)
-    parser.add_argument("--save", type=Path, default=Path("baselines/true_grape.pt"))
+    parser.add_argument("--save", type=Path, default=None)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
@@ -77,6 +87,9 @@ def main() -> None:
     sampler = make_sampler("ore_ple", {"delta_std": args.delta_std, "epsilon_std": args.epsilon_std})
     loss_fn = LOSS_REGISTRY["infidelity"]
 
+    fid_values = []
+    pulse_duration_values = []
+
     best = 0.0
     with tqdm(range(args.epochs), desc=f"GRAPE[{args.target}]") as pbar:
         for _ in pbar:
@@ -89,11 +102,37 @@ def main() -> None:
             F = fidelity(U_out, U_mc, 1).mean().item()
             best = max(best, F)
             pbar.set_postfix(loss=float(loss), fid=F, best=best)
+            fid_values.append(F)
+            durations = pulse[..., 1].sum(dim=-1) / math.pi 
+            pulse_duration_values.append(durations.mean().item())
 
-    args.save.parent.mkdir(parents=True, exist_ok=True)
+    grape_training_df = pd.DataFrame({"fidelity": fid_values, "pulse_duration": pulse_duration_values})
+    grape_training_df.to_csv(f"baselines/true_grape_training_{args.target}_seed_{args.seed}.csv", index=False)
+
+
+    plt.figure()
+
+    plt.plot(fid_values)
+    plt.xlabel("Epoch")
+    plt.ylabel("Fidelity")
+    plt.savefig(f"baselines/true_grape_fid_{args.target}_seed_{args.seed}.png")
+
+    plt.figure()
+
+    plt.plot(pulse_duration_values)
+    plt.xlabel("Epoch")
+    plt.ylabel(r"Pulse Duration ($\pi$)")
+    plt.savefig(f"baselines/true_grape_duration_{args.target}_seed_{args.seed}.png")
+
+    if args.save is not None:
+        args.save.parent.mkdir(parents=True, exist_ok=True)
+        save_dir = args.save
+    else:
+        save_dir = Path(f"baselines/true_grape_{args.target}_seed_{args.seed}.pt")
+
     torch.save({"pulse": model().detach(), "target": args.target,
                 "delta_std": args.delta_std, "epsilon_std": args.epsilon_std,
-                "fid": best}, args.save)
+                "fid": best}, save_dir)
     print(f"saved → {args.save}  best F = {best:.6f}")
 
 
