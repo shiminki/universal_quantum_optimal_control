@@ -78,6 +78,17 @@ pip install -e .[dev]         # + pytest
 ## Train
 
 ```bash
+# hBN Ω=30 MHz target (default): 400 segments, δ uniform up to ±100 MHz,
+# 300 MHz AWG filter in the training loop, rotation-angle penalty
+python scripts/train.py --config configs/transformer_len400_hbn30.yaml \
+                        --save-dir outputs/hbn30
+
+# cheaper alternative: 50 long segments (τ ∈ [0.5, 2.5]); fine-tune afterwards
+# on the discrete hBN lines with --init-checkpoint + error_sampler: hbn_discrete
+python scripts/train.py --config configs/transformer_len50_long_hbn30.yaml \
+                        --save-dir outputs/hbn30_long
+
+# legacy dimensionless configs
 python scripts/train.py --config configs/transformer_len100.yaml \
                         --save-dir outputs/transformer_len100
 ```

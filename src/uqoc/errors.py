@@ -64,6 +64,23 @@ def ore_mhz(batch_size: int, delta_std_mhz: float = 90.0, omega_mhz: float = 30.
     return torch.stack([delta, epsilon])
 
 
+@register("uniform_mhz")
+def uniform_mhz(batch_size: int, delta_max_mhz: float = 100.0, omega_mhz: float = 30.0,
+                epsilon_std: float = 0.0, device=None) -> torch.Tensor:
+    """δ uniform in [−delta_max_mhz, +delta_max_mhz], normalised by Ω. Returns (2, B).
+
+    Bounded support makes it the right final-stage target when the requirement
+    is "F > X across ±delta_max": unlike a Gaussian it spends no samples on
+    detunings outside the specified hardware range.
+    """
+    delta = (torch.rand(batch_size, device=device) * 2.0 - 1.0) * (delta_max_mhz / omega_mhz)
+    if epsilon_std > 0:
+        epsilon = torch.randn(batch_size, device=device) * epsilon_std
+    else:
+        epsilon = torch.zeros(batch_size, device=device)
+    return torch.stack([delta, epsilon])
+
+
 @register("hbn_discrete")
 def hbn_discrete(batch_size: int, detunings_mhz: Sequence[float] = HBN_DETUNINGS_MHZ,
                  omega_mhz: float = 30.0, epsilon_std: float = 0.0,

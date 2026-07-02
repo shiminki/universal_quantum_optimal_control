@@ -1,10 +1,19 @@
-# High-disorder hBN target: Ω = 30 MHz, δ ~ N(0, (3Ω)²), 300 MHz AWG bandwidth.
+# Default hBN config: Ω = 30 MHz, 400 segments, rotation budget up to ~64π.
+# Final curriculum stage trains on δ uniform over ±100 MHz (±3.33 Ω), which
+# covers the inherent hBN lines (±32, ±96 MHz) with no out-of-range tail
+# samples wasting gradient signal (unlike a Gaussian with σ = 3Ω).
+#
+# Memory budget (A100 80 GB): with mode 'both' the propagator runs on the
+# filter's fine grid of M ≈ ceil(T/σ_τ) ≤ 2404 points, so the per-step
+# propagation volume is batch × monte_carlo × M = 128·512·2404 ≈ 1.6e8
+# segment-ops — ~75% of the proven-fit len400 baseline (512·1024·400 ≈ 2.1e8).
+# Trade batch_size against monte_carlo freely, but keep batch·MC·M ≲ 2e8.
 model:
   type: transformer
   num_qubits: 1
   pulse_space:
     phi: [-3.15, 3.15]
-    tau: [0.1, 0.5]
+    tau: [0.1, 0.5]          # T ∈ [40, 200] rad → duration 12.7–64 π
   max_pulses: 400
   d_model: 512
   n_layers: 8
@@ -16,28 +25,28 @@ physics:
   omega_mhz: 30.0            # Rabi frequency (down from 50 MHz)
 
 bandwidth:
-  mode: both                 # none | filter | penalty | both
+  mode: both                 # train THROUGH the 300 MHz filter + residual-slew penalty
   cutoff_mhz: 300.0          # AWG limit = 10 Ω
-  penalty_weight: 1.0        # penalty on post-filter residual slew
+  penalty_weight: 1.0
   max_radius: 32
-  oversample: 8              # fine-grid points per segment for the filter
+  oversample: 4              # grid is σ-resolution-bound (M ≈ 2404) regardless
 
 training:
-  batch_size: 512
-  epochs: 100
-  monte_carlo: 1024
+  batch_size: 128
+  epochs: 120
+  monte_carlo: 512
   learning_rate: 3.0e-5
   grad_clip: 1.0
-  loss: sharp_rotation       # sharp_loss(F) + λ·MSE(θ_target, θ_out)
+  loss: sharp_rotation       # sharp_loss(F) + λ·MSE(θ_target, θ_out), lift-invariant
   loss_params:
-    rotation_weight: 1.0     # λ
-    tau: 0.99
+    rotation_weight: 0.25    # λ — 1.0 lets the θ term fight fidelity early; raise
+    tau: 0.99                #     it only after fidelity has converged
     k: 100.0
-  error_sampler: ore_mhz     # δ_MHz ~ N(0, delta_std_mhz²), normalised by Ω
-  curriculum:                # ramp to δ ~ N(0, 9Ω²): 3Ω = 90 MHz
-    - {delta_std_mhz: 30.0}
-    - {delta_std_mhz: 60.0}
-    - {delta_std_mhz: 90.0}
+  error_sampler: uniform_mhz # δ uniform in ±delta_max_mhz, normalised by Ω
+  curriculum:
+    - {delta_max_mhz: 40.0}
+    - {delta_max_mhz: 70.0}
+    - {delta_max_mhz: 100.0}
 
 dataset:
   train_size: 16384

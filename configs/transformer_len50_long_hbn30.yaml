@@ -1,0 +1,50 @@
+# Alternative hBN config: 50 long segments (τ ∈ [0.5, 2.5] rad, up to ~40π).
+# Cheaper than len400 (fewer control DOF, smaller filter grid M ≤ 1503) and its
+# sparse transitions are barely touched by the 300 MHz filter, but the reduced
+# phase resolution tops out at lower broadband fidelity than len400.
+model:
+  type: transformer
+  num_qubits: 1
+  pulse_space:
+    phi: [-3.15, 3.15]
+    tau: [0.5, 2.5]          # T ∈ [25, 125] rad → duration up to ~40π
+  max_pulses: 50
+  d_model: 512
+  n_layers: 8
+  n_heads: 16
+  dropout: 0.1
+  finetune: null
+
+physics:
+  omega_mhz: 30.0
+
+bandwidth:
+  mode: both
+  cutoff_mhz: 300.0
+  penalty_weight: 1.0
+  max_radius: 32
+  oversample: 8
+
+training:
+  batch_size: 256
+  epochs: 120
+  monte_carlo: 512
+  learning_rate: 3.0e-5
+  grad_clip: 1.0
+  loss: sharp_rotation
+  loss_params:
+    rotation_weight: 0.25
+    tau: 0.99
+    k: 100.0
+  error_sampler: uniform_mhz
+  curriculum:
+    - {delta_max_mhz: 40.0}
+    - {delta_max_mhz: 70.0}
+    - {delta_max_mhz: 100.0}
+
+dataset:
+  train_size: 16384
+  eval_size: 1024
+  random: false
+
+seed: 0

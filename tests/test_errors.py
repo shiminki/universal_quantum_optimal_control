@@ -31,6 +31,17 @@ def test_hbn_discrete_hits_only_lines():
     assert torch.unique(err[0]).numel() == 4
 
 
+def test_uniform_mhz_bounded_support():
+    torch.manual_seed(0)
+    sampler = make_sampler("uniform_mhz", {"delta_max_mhz": 100.0}, omega_mhz=30.0)
+    err = sampler(100_000)
+    bound = 100.0 / 30.0
+    assert err[0].abs().max() <= bound
+    assert err[0].abs().max() > 0.99 * bound      # actually fills the range
+    assert abs(err[0].mean().item()) < 0.02
+    assert torch.all(err[1] == 0.0)
+
+
 def test_dimensionless_samplers_ignore_omega():
     # `ore`/`ore_ple` don't declare omega_mhz — injection must not break them.
     sampler = make_sampler("ore_ple", {"delta_std": 0.4, "epsilon_std": 0.05},

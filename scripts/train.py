@@ -32,6 +32,9 @@ def main() -> None:
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--save-dir", required=True, type=Path)
     parser.add_argument("--device", default=None, help="cpu | cuda | mps (auto if omitted)")
+    parser.add_argument("--init-checkpoint", type=Path, default=None,
+                        help="warm-start weights (e.g. fine-tune a uniform-trained "
+                             "model on the discrete hBN lines via error_sampler: hbn_discrete)")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -41,6 +44,10 @@ def main() -> None:
           f"  bandwidth={cfg.bandwidth.mode}@{cfg.bandwidth.cutoff_mhz} MHz")
 
     model = build_model(cfg.model)
+    if args.init_checkpoint is not None:
+        import torch
+        model.load_state_dict(torch.load(args.init_checkpoint, map_location="cpu"))
+        print(f"[train] warm-started from {args.init_checkpoint}")
     loss_fn = make_loss(cfg.training.loss, cfg.training.loss_params)
     pulse_transform, pulse_penalty = make_bandwidth(
         cfg.bandwidth.mode, cfg.bandwidth.cutoff_mhz, cfg.physics.omega_mhz,
