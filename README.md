@@ -28,10 +28,13 @@ Haar-averaged entanglement fidelity across a curriculum of increasing disorder:
 
 ```
 src/uqoc/
-  quantum.py          Paulis (cached), rotation_unitary, Y-X-Y Euler, SCORE, fidelity
+  quantum.py          Paulis (cached), rotation_unitary, Y-X-Y Euler, SCORE, fidelity,
+                      differentiable rotation-angle extraction
   propagator.py       Closed-form (B, L, 2) → (B, 2, 2) log-depth composite
-  errors.py           ORE / ORE+PLE samplers (registered by name)
-  fidelity.py         {neg_log, infidelity, sharp} losses (registered by name)
+  errors.py           ORE / ORE+PLE / physical-MHz / hBN-discrete samplers (by name)
+  fidelity.py         {neg_log, infidelity, sharp, sharp_rotation} losses (by name)
+  bandwidth.py        Differentiable AWG bandwidth constraints (Gaussian low-pass
+                      on the phase, slew-rate penalty)
   dataset.py          Random/grid SU(2) target sampler
   config.py           YAML → dataclass
   utils.py            set_seed, default_device

@@ -7,6 +7,8 @@ from uqoc.quantum import (
     euler_yxy,
     fidelity,
     paulis,
+    rotation_angle,
+    rotation_angle_error,
     rotation_unitary,
     rotation_vector_to_unitary,
     score_sequence_from_yxy,
@@ -73,6 +75,69 @@ def test_to_real_vector_roundtrip():
     # real/imag are interleaved — first two entries match real, imag of U[b, 0, 0].
     assert torch.allclose(v[0, 0], U[0, 0, 0].real)
     assert torch.allclose(v[0, 1], U[0, 0, 0].imag)
+
+
+def test_rotation_angle_recovers_theta():
+    torch.manual_seed(0)
+    B = 64
+    n = torch.randn(B, 3)
+    n = n / n.norm(dim=1, keepdim=True)
+    theta = torch.rand(B) * 2 * math.pi  # canonical branch [0, 2π]
+    U = rotation_unitary(n, theta)
+    assert torch.allclose(rotation_angle(U), theta, atol=1e-4)
+
+
+def test_rotation_angle_stable_at_branch_points():
+    """No NaN in value or gradient at θ = 0, π, 2π where arccos(±1) would blow up."""
+    n = torch.tensor([0.0, 0.0, 1.0])
+    for theta in (0.0, math.pi, 2 * math.pi):
+        t = torch.tensor(theta, requires_grad=True)
+        U = rotation_unitary(n, t)
+        out = rotation_angle(U)
+        assert torch.isfinite(out)
+        out.backward()
+        assert torch.isfinite(t.grad)
+
+
+def test_rotation_angle_batched_gradients_finite():
+    torch.manual_seed(1)
+    B = 32
+    n = torch.randn(B, 3)
+    n = n / n.norm(dim=1, keepdim=True)
+    theta_raw = torch.rand(B, requires_grad=True)
+    U = rotation_unitary(n, theta_raw * 2 * math.pi)
+    rotation_angle(U).sum().backward()
+    assert torch.isfinite(theta_raw.grad).all()
+
+
+def test_rotation_angle_error_invariant_under_global_sign():
+    """U and −U are the same physical gate (F=1) and must carry zero angle error."""
+    torch.manual_seed(2)
+    B = 32
+    n = torch.randn(B, 3)
+    n = n / n.norm(dim=1, keepdim=True)
+    theta = torch.rand(B) * 2 * math.pi
+    U = rotation_unitary(n, theta)
+    assert rotation_angle_error(-U, U).abs().max() < 1e-4
+    assert rotation_angle_error(U, U).abs().max() < 1e-4
+
+
+def test_rotation_angle_error_double_pi_composite_is_perfect_identity():
+    """Two π pulses compose to −I: fidelity-perfect identity, zero rotation error."""
+    n = torch.tensor([[1.0, 0.0, 0.0]])
+    U = rotation_unitary(n, torch.tensor([math.pi]))
+    minus_I = U @ U
+    I = torch.eye(2, dtype=minus_I.dtype).unsqueeze(0)
+    assert torch.allclose(fidelity(minus_I, I), torch.ones(1), atol=1e-6)
+    assert rotation_angle_error(minus_I, I).abs().max() < 1e-3
+
+
+def test_rotation_angle_error_measures_real_error():
+    # π-pulse target vs (π+0.2)-pulse output → |error| = 0.2
+    n = torch.tensor([[0.0, 1.0, 0.0]])
+    U_t = rotation_unitary(n, torch.tensor([math.pi]))
+    U_o = rotation_unitary(n, torch.tensor([math.pi + 0.2]))
+    assert abs(rotation_angle_error(U_o, U_t).abs().item() - 0.2) < 1e-4
 
 
 def test_score_sequence_shape():

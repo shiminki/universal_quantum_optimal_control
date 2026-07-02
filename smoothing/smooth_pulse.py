@@ -19,6 +19,7 @@ Usage:
 """
 
 import argparse
+import math
 import numpy as np
 import pandas as pd
 
@@ -42,6 +43,49 @@ def lowpass_filter(signal, dt_us, cutoff_MHz):
     spectrum = np.fft.rfft(signal)
     spectrum[freqs > cutoff_MHz] = 0.0
     return np.fft.irfft(spectrum, n=N)
+
+
+def smooth_pulse_tensor(pulse: np.ndarray, cutoff_MHz: float, omega_max: float,
+                        oversample: int = 8) -> np.ndarray:
+    """Apply low-pass filter directly to an [N, 2] pulse array (phi, tau_rad).
+
+    Keeps segment durations (tau_rad) unchanged; smooths the unwrapped phase
+    via the FFT brick-wall lowpass_filter.  Returns a new [N, 2] array with
+    the smoothed phi and original tau_rad.
+
+    Parameters
+    ----------
+    pulse      : np.ndarray [N, 2] — columns are [phi (rad), tau (rad)]
+    cutoff_MHz : brick-wall cutoff frequency in MHz
+    omega_max  : Rabi frequency in (2π) MHz, used to convert tau to µs
+    oversample : uniform-grid oversample factor (default 8)
+    """
+    phi = np.unwrap(pulse[:, 0].astype(float))
+    tau_rad = pulse[:, 1].astype(float)
+    omega_ang = 2.0 * math.pi * omega_max        # rad / µs
+    tau_us = tau_rad / omega_ang
+
+    T_total = tau_us.sum()
+    dt_u = tau_us.mean() / oversample
+    M = int(np.ceil(T_total / dt_u))
+    t_edges = np.concatenate([[0.0], np.cumsum(tau_us)])
+
+    phase_u = np.zeros(M)
+    for j in range(len(tau_us)):
+        i0 = min(int(round(t_edges[j] / dt_u)), M)
+        i1 = min(int(round(t_edges[j + 1] / dt_u)), M)
+        if i1 > i0:
+            phase_u[i0:i1] = phi[j]
+
+    nyquist_MHz = 0.5 / dt_u
+    cutoff_eff = min(cutoff_MHz, nyquist_MHz * 0.99)
+    phase_filt = lowpass_filter(phase_u, dt_u, cutoff_eff)
+
+    t_mids = 0.5 * (t_edges[:-1] + t_edges[1:])
+    idx = np.clip(np.round(t_mids / dt_u).astype(int), 0, M - 1)
+    phi_smooth = phase_filt[idx]
+
+    return np.stack([phi_smooth, tau_rad], axis=1).astype(pulse.dtype)
 
 
 def smooth_pulse(input_csv: str,

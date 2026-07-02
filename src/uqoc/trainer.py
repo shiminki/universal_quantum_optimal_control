@@ -35,6 +35,9 @@ class Trainer:
         grad_clip: float = 1.0,
         optimizer: Optional[torch.optim.Optimizer] = None,
         device: torch.device | str = "cpu",
+        pulse_transform: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+        pulse_penalty: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+        penalty_weight: float = 1.0,
     ) -> None:
         self.device = torch.device(device)
         self.model = model.to(self.device)
@@ -43,6 +46,9 @@ class Trainer:
         self.monte_carlo = monte_carlo
         self.grad_clip = grad_clip
         self.optimizer = optimizer or torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+        self.pulse_transform = pulse_transform
+        self.pulse_penalty = pulse_penalty
+        self.penalty_weight = penalty_weight
 
         n_params = sum(p.numel() for p in self.model.parameters())
         print(f"[trainer] model '{type(self.model).__name__}' has {n_params:,} parameters")
@@ -53,21 +59,30 @@ class Trainer:
     # --------------------------------------------------------------- step
     def _rollout(self, rot_vec: torch.Tensor, U_target: torch.Tensor,
                  error_sampler: ErrorSampler) -> torch.Tensor:
-        """Forward pulses and propagator once over MC-expanded batch. Returns (U_out, U_target_mc)."""
+        """Forward pulses and propagator once over MC-expanded batch.
+
+        The pulse transform (e.g. bandwidth low-pass) is applied before the
+        Monte-Carlo expansion — once per unique sequence, not per error sample.
+        Returns (U_out, U_target_mc, pulses).
+        """
         pulses = self.model(rot_vec)
+        if self.pulse_transform is not None:
+            pulses = self.pulse_transform(pulses)
         B = rot_vec.shape[0]
         pulses_mc = pulses.repeat_interleave(self.monte_carlo, dim=0)
         target_mc = U_target.repeat_interleave(self.monte_carlo, dim=0)
         error = error_sampler(self.monte_carlo * B).to(self.device)
         U_out = self.unitary_generator(pulses_mc, error)
-        return U_out, target_mc
+        return U_out, target_mc, pulses
 
     def train_step(self, rot_vec: torch.Tensor, U_target: torch.Tensor,
                    error_sampler: ErrorSampler) -> float:
         self.model.train()
         self.optimizer.zero_grad()
-        U_out, target_mc = self._rollout(rot_vec, U_target, error_sampler)
+        U_out, target_mc, pulses = self._rollout(rot_vec, U_target, error_sampler)
         loss = self.loss_fn(U_out, target_mc, self.model.num_qubits)
+        if self.pulse_penalty is not None:
+            loss = loss + self.penalty_weight * self.pulse_penalty(pulses)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
         self.optimizer.step()
@@ -77,7 +92,7 @@ class Trainer:
     def evaluate(self, rot_vec: torch.Tensor, U_target: torch.Tensor,
                  error_sampler: ErrorSampler) -> float:
         self.model.eval()
-        U_out, target_mc = self._rollout(rot_vec, U_target, error_sampler)
+        U_out, target_mc, _ = self._rollout(rot_vec, U_target, error_sampler)
         return default_fidelity(U_out, target_mc, self.model.num_qubits).mean().item()
 
     # --------------------------------------------------------------- loop
@@ -94,6 +109,11 @@ class Trainer:
         save_dir: str | Path | None = None,
     ) -> None:
         save_dir_path = Path(save_dir) if save_dir else None
+        # One host→device copy up front; per-batch .to() below becomes a no-op.
+        train_rot_vec = train_rot_vec.to(self.device)
+        train_U = train_U.to(self.device)
+        eval_rot_vec = eval_rot_vec.to(self.device)
+        eval_U = eval_U.to(self.device)
         train_rot_batches = _chunk(train_rot_vec, batch_size)
         train_U_batches = _chunk(train_U, batch_size)
         eval_rot_batches = _chunk(eval_rot_vec, batch_size)
@@ -129,8 +149,10 @@ class Trainer:
                 save_dir_path.mkdir(parents=True, exist_ok=True)
                 torch.save(self.best_state, save_dir_path / f"{tag}.pt")
                 with torch.no_grad():
-                    pulses = self.model(train_rot_vec.to(self.device)).cpu()
-                torch.save(pulses, save_dir_path / f"{tag}_pulses.pt")
+                    pulses = self.model(train_rot_vec.to(self.device))
+                    if self.pulse_transform is not None:
+                        pulses = self.pulse_transform(pulses)
+                torch.save(pulses.cpu(), save_dir_path / f"{tag}_pulses.pt")
                 print(f"[trainer] saved weights → {save_dir_path / f'{tag}.pt'}")
 
 

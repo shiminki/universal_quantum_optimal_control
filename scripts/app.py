@@ -126,25 +126,37 @@ def _csv_to_internal(df: pd.DataFrame, Omega: float) -> torch.Tensor:
 
 # ---------------------------------------------------------------- Gradio cbs
 def _cb_params(key, x, y, z, th, Omega, cutoff):
+    from smoothing.smooth_pulse import smooth_pulse_tensor
     pulse, _ = _pulse_and_unitary(key, x, y, z, th, args.hf_weights)
     df = _pulse_to_df(pulse, Omega)
     os.makedirs("demo_outputs/params", exist_ok=True)
     orig = "demo_outputs/params/pulse_params.csv"
     df.to_csv(orig, index=False)
-    from smoothing.smooth_pulse import smooth_pulse
+    pulse_s_np = smooth_pulse_tensor(pulse.numpy(), cutoff_MHz=cutoff, omega_max=Omega)
+    pulse_s = torch.tensor(pulse_s_np, dtype=pulse.dtype)
+    df_s = _pulse_to_df(pulse_s, Omega)
     smooth = "demo_outputs/params/pulse_params_smoothed.csv"
-    smooth_pulse(orig, smooth, cutoff_MHz=cutoff, omega_max=Omega)
-    df_s = pd.read_csv(smooth)
+    df_s.to_csv(smooth, index=False)
     return df, orig, df_s, smooth
 
 
 def _cb_contour(key, x, y, z, th, Omega, cutoff):
+    from smoothing.smooth_pulse import smooth_pulse_tensor
     pulse, U = _pulse_and_unitary(key, x, y, z, th, args.hf_weights)
     outdir = "demo_outputs/contour"
     phi, theta = _axis_angles(x, y, z)
     name = f"(axis=n(phi={phi:.2f}, theta={theta:.2f}), rotation={th:.2f} pi)"
     fidelity_contour_plot(name, U, pulse, key, outdir, phase_only=True, Omega=Omega)
-    return sorted(glob.glob(os.path.join(outdir, f"{name}*")))
+    files = sorted(glob.glob(os.path.join(outdir, f"{name}.png")))
+
+    if cutoff is not None:
+        pulse_s_np = smooth_pulse_tensor(pulse.numpy(), cutoff_MHz=cutoff, omega_max=Omega)
+        pulse_s = torch.tensor(pulse_s_np, dtype=pulse.dtype)
+        name_s = f"(axis=n(phi={phi:.2f}, theta={theta:.2f}), rotation={th:.2f} pi)_lpf{cutoff:.0f}"
+        fidelity_contour_plot(name_s, U, pulse_s, key, outdir, phase_only=True, Omega=Omega)
+        files += sorted(glob.glob(os.path.join(outdir, f"{name_s}.png")))
+
+    return files
 
 
 def _cb_paramplot(key, x, y, z, th, Omega, cutoff):
@@ -210,6 +222,113 @@ def _cb_evolution(key, x, y, z, th, Omega):
     return vid, [vid]
 
 
+def _cb_fidelity_vs_cutoff(key, x, y, z, th, Omega, cutoff_val,
+                            cutoff_min=80.0, cutoff_max=8000.0, cutoff_step=80.0):
+    from smoothing.smooth_pulse import smooth_pulse
+
+    pulse, U_target = _pulse_and_unitary(key, x, y, z, th, args.hf_weights)
+
+    cutoffs = np.arange(cutoff_min, cutoff_max + cutoff_step / 2, cutoff_step)
+    M = 5000
+    errors_mc = torch.stack([
+        torch.randn(M) * 1.0,
+        torch.randn(M) * 0.05,
+    ])
+    U_target_batch = U_target.unsqueeze(0).expand(M, -1, -1)
+
+    # Unfiltered fidelity
+    pulse_batch_orig = pulse.unsqueeze(0).expand(M, -1, -1)
+    U_out_orig = batched_unitary_generator(pulse_batch_orig, errors_mc)
+    F_orig = fidelity(U_out_orig, U_target_batch).mean().item()
+
+    outdir = "demo_outputs/params"
+    os.makedirs(outdir, exist_ok=True)
+    df_orig = _pulse_to_df(pulse, Omega)
+    orig_csv = os.path.join(outdir, "pulse_params_cutoff_sweep.csv")
+    df_orig.to_csv(orig_csv, index=False)
+
+    infidelities = []
+    for c in cutoffs:
+        smooth_csv = os.path.join(outdir, "pulse_smoothed_cutoff_sweep.csv")
+        smooth_pulse(orig_csv, smooth_csv, cutoff_MHz=c, omega_max=Omega)
+        df_s = pd.read_csv(smooth_csv)
+        pulse_s = _csv_to_internal(df_s, Omega)
+        pulse_batch_s = pulse_s.unsqueeze(0).expand(M, -1, -1)
+        U_out_s = batched_unitary_generator(pulse_batch_s, errors_mc)
+        F_s = fidelity(U_out_s, U_target_batch).mean().item()
+        infidelities.append(1.0 - F_s)
+
+    infidelities = np.clip(np.array(infidelities), 1e-12, None)
+
+    phi, theta = _axis_angles(x, y, z)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(cutoffs, infidelities, 'o-', color='C0', label='Infidelity')
+    ax.axhline(y=1 - F_orig, color='r', linestyle='--', label="Unfiltered Infidelity")
+    ax.set_xlabel(r"Cutoff frequency $(2\pi)$ MHz", fontsize=18)
+    ax.set_ylabel("Infidelity $(1 - F)$", fontsize=18)
+    ax.set_title(
+        rf"Target = $U[\vec{{n}}(\phi={phi:.2f}, \theta={theta:.2f}), \alpha={th:.2f}\pi]$"
+        + "\n"
+        + rf"model={key}, Rabi = $(2\pi)\ {Omega}$ MHz",
+        fontsize=18,
+    )
+    ax.semilogy()
+    ax.legend()
+    ax.grid(True, which='both', alpha=0.3)
+    plt.tight_layout()
+
+    plot_dir = "demo_outputs/fidelity_vs_cutoff"
+    os.makedirs(plot_dir, exist_ok=True)
+    target_name = f"cutoff_sweep_phi{phi:.2f}_theta{theta:.2f}_lam{th:.2f}_{key}"
+    out_path = os.path.join(plot_dir, f"{target_name}.png")
+    plt.savefig(out_path)
+    plt.close(fig)
+
+    # Frequency spectrum of the pulse
+    Omega_ang = 2 * math.pi * Omega
+    phi_pulse = pulse[:, 0].numpy()
+    tau_pulse = pulse[:, 1].numpy() / Omega_ang
+    H_x = np.cos(phi_pulse) * Omega
+    H_y = np.sin(phi_pulse) * Omega
+    T_total = tau_pulse.sum()
+    oversample = 8
+    dt_u = tau_pulse.mean() / oversample
+    N_grid = int(np.ceil(T_total / dt_u))
+    t_edges = np.concatenate([[0.0], np.cumsum(tau_pulse)])
+    Omega_x_u = np.zeros(N_grid)
+    Omega_y_u = np.zeros(N_grid)
+    for j in range(len(tau_pulse)):
+        i0 = min(int(round(t_edges[j] / dt_u)), N_grid)
+        i1 = min(int(round(t_edges[j + 1] / dt_u)), N_grid)
+        if i1 > i0:
+            Omega_x_u[i0:i1] = H_x[j]
+            Omega_y_u[i0:i1] = H_y[j]
+    spectrum = np.abs(np.fft.fft(Omega_x_u + 1j * Omega_y_u)) / N_grid
+    freqs_MHz = np.fft.fftfreq(N_grid, d=dt_u)
+
+    fig2, ax2 = plt.subplots(figsize=(8, 6))
+    ax2.plot(freqs_MHz, spectrum, color='C0', linewidth=0.8)
+    ax2.axvline(x=cutoff_val, color='r', linestyle='--', linewidth=1.5,
+                label=rf'Slider cutoff = $(2\pi)$ {cutoff_val:.0f} MHz')
+    ax2.set_xlabel(r"Frequency $(2\pi)$ MHz")
+    ax2.set_ylabel(r"$|\mathcal{F}[\Omega](f)|$ $(2\pi$ MHz)")
+    ax2.set_title(
+        rf"Spectrum: $U(\vec{{n}}(\phi={phi:.2f}, \theta={theta:.2f}), \alpha={th:.2f}\pi)$"
+        + "\n"
+        + rf"model={key}, Rabi = $(2\pi)\ {Omega}$ MHz, $T = {T_total * 1000:.2f}$ ns"
+    )
+    ax2.set_xlim(0, 8000)
+    ax2.semilogy()
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    plt.tight_layout()
+    spectrum_path = os.path.join(plot_dir, f"{target_name}_spectrum.png")
+    plt.savefig(spectrum_path)
+    plt.close(fig2)
+
+    return [out_path, spectrum_path]
+
+
 # -------------------------------------------------------------------- main
 def _predownload_all() -> None:
     if args.hf_weights:
@@ -227,23 +346,26 @@ with gr.Blocks() as demo:
             y_in = gr.Number(0.0, label="y-component")
             z_in = gr.Number(0.0, label="z-component")
             th = gr.Slider(0.0, 2.0, value=0.5, step=0.01, label="Theta (π units)")
-            Omega_s = gr.Slider(20, 100, value=80, step=1, label="Omega (2π MHz)")
+            Omega_s = gr.Slider(10, 100, value=80, step=1, label="Omega (2π MHz)")
             cutoff_s = gr.Slider(100, 10000, value=3000, step=100, label="Low-pass cutoff")
             btn1 = gr.Button("Compute Parameters")
             btn2 = gr.Button("Fidelity vs Std")
             btn3 = gr.Button("Evolution Video")
+            btn4 = gr.Button("Fidelity vs Cutoff")
         with gr.Column(scale=2):
             df_out = gr.Dataframe(label="Original Pulse CSV"); csv_dl = gr.File(label="Download Original")
             df_s_out = gr.Dataframe(label="Smoothed Pulse CSV"); csv_s_dl = gr.File(label="Download Smoothed")
             cont_g = gr.Gallery(label="Contour"); param_g = gr.Gallery(label="Param Plot")
             fid_g = gr.Gallery(label="Fidelity vs Std"); vid_out = gr.Video(label="Evolution")
             vid_dl = gr.File(label="Download Video")
+            cutoff_g = gr.Gallery(label="Fidelity vs Cutoff")
     inputs = [model_dd, x_in, y_in, z_in, th, Omega_s, cutoff_s]
     btn1.click(_cb_params, inputs, [df_out, csv_dl, df_s_out, csv_s_dl])
     btn1.click(_cb_contour, inputs, [cont_g])
     btn1.click(_cb_paramplot, inputs, [param_g])
     btn2.click(_cb_fidelity, inputs, [fid_g])
     btn3.click(_cb_evolution, [model_dd, x_in, y_in, z_in, th, Omega_s], [vid_out, vid_dl])
+    btn4.click(_cb_fidelity_vs_cutoff, inputs, [cutoff_g])
 
 
 if __name__ == "__main__":

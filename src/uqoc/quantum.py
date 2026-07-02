@@ -138,3 +138,35 @@ def fidelity(U_out: torch.Tensor, U_target: torch.Tensor, num_qubits: int = 1) -
     trace = torch.einsum('...ii->...', product)
     d = 2 ** num_qubits
     return (trace.abs() ** 2 + d) / (d * (d + 1))
+
+
+def rotation_angle(U: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
+    """Rotation angle θ ∈ [0, 2π] of an SU(2) unitary U = exp(-i θ/2 n·σ). (..., 2, 2) → (...).
+
+    Writes U = cos(θ/2)·I − i sin(θ/2)·n·σ and recovers θ = 2·atan2(‖sin(θ/2)·n‖, cos(θ/2)).
+    atan2 keeps gradients bounded where arccos(±1) would blow up (θ = 0 or 2π), and the
+    eps inside the sqrt keeps the θ = 0 gradient finite; both branches stay NaN-free.
+    """
+    c = 0.5 * (U[..., 0, 0].real + U[..., 1, 1].real)            # cos(θ/2)
+    sx = -0.5 * (U[..., 0, 1].imag + U[..., 1, 0].imag)          # sin(θ/2)·n_x
+    sy = 0.5 * (U[..., 1, 0].real - U[..., 0, 1].real)           # sin(θ/2)·n_y
+    sz = 0.5 * (U[..., 1, 1].imag - U[..., 0, 0].imag)           # sin(θ/2)·n_z
+    s = torch.sqrt(sx * sx + sy * sy + sz * sz + eps)
+    return 2.0 * torch.atan2(s, c)
+
+
+def rotation_angle_error(U_out: torch.Tensor, U_target: torch.Tensor,
+                         eps: float = 1e-12) -> torch.Tensor:
+    """Physical rotation-angle error between two SU(2) unitaries, per batch element.
+
+    SU(2) double-covers SO(3): U and −U implement the same gate but carry
+    canonical angles θ and 2π−θ, so raw angle differences would charge a
+    fidelity-perfect output on the −U lift up to 2π of spurious error. Folding
+    both angles onto the physical range [0, π] via θ_phys = π − |θ − π| removes
+    the lift ambiguity — exactly the invariance of the cycle-diffusion metric
+    P_n = E[|cos(nθ/2)|²] this error feeds. Differentiable and NaN-free; the
+    fold's kink at θ = π vanishes under the square used by the loss.
+    """
+    theta_out = rotation_angle(U_out, eps)
+    theta_tgt = rotation_angle(U_target, eps)
+    return (theta_tgt - math.pi).abs() - (theta_out - math.pi).abs()

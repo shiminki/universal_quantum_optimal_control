@@ -75,7 +75,7 @@ def fidelity_contour_plot(target_name: str, U_target: torch.Tensor, pulse: torch
 
     plt.figure(figsize=(18, 14))
     contour = plt.contourf(ORE_np, PLE_np, F_np,
-                           levels=[0.8, 0.9, 0.95, 0.97, 0.98, 0.99, 0.999, 1.0], cmap='viridis')
+                           levels=[0.3, 0.6 ,0.8, 0.9, 0.95, 0.97, 0.98, 0.99, 0.999, 1.0], cmap='viridis')
     plt.contour(ORE_np, PLE_np, F_np, levels=[0.95, 0.99, 0.999], colors='white', linewidths=1.5)
     cbar = plt.colorbar(contour)
     cbar.set_label('Fidelity', fontsize=24)
